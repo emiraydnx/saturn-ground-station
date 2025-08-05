@@ -19,7 +19,6 @@
     <None Remove="Assets\teamlogo.png" />
     <None Remove="ChartPage.xaml" />
     <None Remove="HomePage.xaml" />
-    <None Remove="HYI.xaml" />
     <None Remove="SettingPage.xaml" />
     <None Remove="sitPage.xaml" />
   </ItemGroup>
@@ -77,11 +76,6 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
-    <Page Update="HYI.xaml">
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
-  </ItemGroup>
-  <ItemGroup>
     <Page Update="ChartPage.xaml">
       <Generator>MSBuild:Compile</Generator>
     </Page>
@@ -116,6 +110,16 @@
     <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">True</PublishReadyToRun>
     <PublishTrimmed Condition="'$(Configuration)' == 'Debug'">False</PublishTrimmed>
     <PublishTrimmed Condition="'$(Configuration)' != 'Debug'">True</PublishTrimmed>
+    <GenerateAppInstallerFile>True</GenerateAppInstallerFile>
+    <AppxPackageSigningEnabled>True</AppxPackageSigningEnabled>
+    <PackageCertificateThumbprint>140CD03652256987BB8B17ABD56BD83EF362F1C1</PackageCertificateThumbprint>
+    <AppxPackageSigningTimestampDigestAlgorithm>SHA256</AppxPackageSigningTimestampDigestAlgorithm>
+    <AppxAutoIncrementPackageRevision>True</AppxAutoIncrementPackageRevision>
+    <AppxSymbolPackageEnabled>False</AppxSymbolPackageEnabled>
+    <GenerateTestArtifacts>True</GenerateTestArtifacts>
+    <AppxBundle>Never</AppxBundle>
+    <AppInstallerUri>C:\Users\Emirhan\Desktop\yeristasyonu</AppInstallerUri>
+    <HoursBetweenUpdateChecks>0</HoursBetweenUpdateChecks>
   </PropertyGroup>
 	<ItemGroup>
 		<Content Include="Assets\rocket_model.STL">

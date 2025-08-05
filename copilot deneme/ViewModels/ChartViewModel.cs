@@ -15,8 +15,9 @@ namespace copilot_deneme.ViewModels
 
         private readonly ObservableCollection<ObservableValue> _rocketAltitudeValue;
         private readonly ObservableCollection<ObservableValue> _payloadAltitudeValue;
-        private readonly ObservableCollection<ObservableValue> _rocketAccelZValue;
-        private readonly ObservableCollection<ObservableValue> _payloadAccelZValue;
+        private readonly ObservableCollection<ObservableValue> _accelZValue;
+        private readonly ObservableCollection<ObservableValue> _accelXValue;
+        private readonly ObservableCollection<ObservableValue> _accelYValue;
         private readonly ObservableCollection<ObservableValue> _rocketSpeedValue;
         private readonly ObservableCollection<ObservableValue> _payloadSpeedValue;
         private readonly ObservableCollection<ObservableValue> _rocketTempValue;
@@ -25,13 +26,6 @@ namespace copilot_deneme.ViewModels
         private readonly ObservableCollection<ObservableValue> _payloadPressureValue;
         private readonly ObservableCollection<ObservableValue> _payloadHumidityValue;
 
-        // Yeni seriler - jiroskop ve açý için
-        private readonly ObservableCollection<ObservableValue> _gyroXValue;
-        private readonly ObservableCollection<ObservableValue> _gyroYValue;
-        private readonly ObservableCollection<ObservableValue> _gyroZValue;
-        private readonly ObservableCollection<ObservableValue> _accelXValue;
-        private readonly ObservableCollection<ObservableValue> _accelYValue;
-        private readonly ObservableCollection<ObservableValue> _angleValue;
 
         private string _statusText = "Baðlantý bekleniyor...";
         public string StatusText
@@ -46,8 +40,6 @@ namespace copilot_deneme.ViewModels
         public ObservableCollection<ISeries> TemperatureSeries { get; set; }
         public ObservableCollection<ISeries> PressureSeries { get; set; }
         public ObservableCollection<ISeries> HumiditySeries { get; set; }
-        public ObservableCollection<ISeries> GyroSeries { get; set; }
-        public ObservableCollection<ISeries> AngleSeries { get; set; }
 
         public ChartViewModel()
         {
@@ -55,8 +47,9 @@ namespace copilot_deneme.ViewModels
             _rocketAltitudeValue = new ObservableCollection<ObservableValue>();
             _payloadAltitudeValue = new ObservableCollection<ObservableValue>();
 
-            _rocketAccelZValue = new ObservableCollection<ObservableValue>();
-            _payloadAccelZValue = new ObservableCollection<ObservableValue>();
+            _accelXValue = new ObservableCollection<ObservableValue>();
+            _accelYValue = new ObservableCollection<ObservableValue>();
+            _accelZValue = new ObservableCollection<ObservableValue>();
 
             _rocketSpeedValue = new ObservableCollection<ObservableValue>();
             _payloadSpeedValue = new ObservableCollection<ObservableValue>();
@@ -69,13 +62,6 @@ namespace copilot_deneme.ViewModels
 
             _payloadHumidityValue = new ObservableCollection<ObservableValue>();
 
-            // Yeni seriler - jiroskop ve açý
-            _gyroXValue = new ObservableCollection<ObservableValue>();
-            _gyroYValue = new ObservableCollection<ObservableValue>();
-            _gyroZValue = new ObservableCollection<ObservableValue>();
-            _accelXValue = new ObservableCollection<ObservableValue>();
-            _accelYValue = new ObservableCollection<ObservableValue>();
-            _angleValue = new ObservableCollection<ObservableValue>();
 
             AltitudeSeries = new ObservableCollection<ISeries>
             {
@@ -99,15 +85,22 @@ namespace copilot_deneme.ViewModels
             {
                 new LineSeries<ObservableValue>
                 {
-                    Name = "Roket Z Ývmesi",
-                    Values = _rocketAccelZValue,
+                    Name = " X Ývmesi",
+                    Values = _accelXValue,
                     Stroke = new SolidColorPaint(SKColors.CornflowerBlue) { StrokeThickness = 3 },
                     Fill = null, GeometrySize = 0
                 },
                 new LineSeries<ObservableValue>
                 {
-                    Name = "Payload Z Ývmesi",
-                    Values = _payloadAccelZValue,
+                    Name = " Y Ývmesi",
+                    Values = _accelYValue,
+                    Stroke = new SolidColorPaint(SKColors.Gold) { StrokeThickness = 3 },
+                    Fill = null, GeometrySize = 0
+                },
+                 new LineSeries<ObservableValue>
+                {
+                    Name = " Z Ývmesi",
+                    Values = _accelZValue,
                     Stroke = new SolidColorPaint(SKColors.IndianRed) { StrokeThickness = 3 },
                     Fill = null, GeometrySize = 0
                 },
@@ -178,43 +171,6 @@ namespace copilot_deneme.ViewModels
                 }
             };
 
-            // Yeni seriler - jiroskop
-            GyroSeries = new ObservableCollection<ISeries>
-            {
-                new LineSeries<ObservableValue>
-                {
-                    Name = "Jiroskop X",
-                    Values = _gyroXValue,
-                    Stroke = new SolidColorPaint(SKColors.Red) { StrokeThickness = 2 },
-                    Fill = null, GeometrySize = 0
-                },
-                new LineSeries<ObservableValue>
-                {
-                    Name = "Jiroskop Y",
-                    Values = _gyroYValue,
-                    Stroke = new SolidColorPaint(SKColors.Green) { StrokeThickness = 2 },
-                    Fill = null, GeometrySize = 0
-                },
-                new LineSeries<ObservableValue>
-                {
-                    Name = "Jiroskop Z",
-                    Values = _gyroZValue,
-                    Stroke = new SolidColorPaint(SKColors.Blue) { StrokeThickness = 2 },
-                    Fill = null, GeometrySize = 0
-                }
-            };
-
-            // Açý serisi
-            AngleSeries = new ObservableCollection<ISeries>
-            {
-                new LineSeries<ObservableValue>
-                {
-                    Name = "Açý",
-                    Values = _angleValue,
-                    Stroke = new SolidColorPaint(SKColors.Purple) { StrokeThickness = 3 },
-                    Fill = null, GeometrySize = 0
-                }
-            };
         }
 
         public void AddRocketAltitudeValue(float value)
@@ -227,16 +183,22 @@ namespace copilot_deneme.ViewModels
             _payloadAltitudeValue.Add(new ObservableValue(value));
             if (_payloadAltitudeValue.Count > MaxDataPoints) _payloadAltitudeValue.RemoveAt(0);
         }
+        public void addRocketAccelXValue(float value)
+        {
+            _accelXValue.Add(new ObservableValue(value));
+            if (_accelXValue.Count > MaxDataPoints) _accelXValue.RemoveAt(0);
+        }
+        public void addRocketAccelYValue(float value)
+        {
+            _accelYValue.Add(new ObservableValue(value));
+            if (_accelYValue.Count > MaxDataPoints) _accelYValue.RemoveAt(0);
+        }
         public void addRocketAccelZValue(float value)
         {
-            _rocketAccelZValue.Add(new ObservableValue(value));
-            if (_rocketAccelZValue.Count > MaxDataPoints) _rocketAccelZValue.RemoveAt(0);
+            _accelZValue.Add(new ObservableValue(value));
+            if (_accelZValue.Count > MaxDataPoints) _accelZValue.RemoveAt(0);
         }
-        public void addPayloadAccelZValue(float value)
-        {
-            _payloadAccelZValue.Add(new ObservableValue(value));
-            if (_payloadAccelZValue.Count > MaxDataPoints) _payloadAccelZValue.RemoveAt(0);
-        }
+
         public void addRocketSpeedValue(float value)
         {
             _rocketSpeedValue.Add(new ObservableValue(value));
@@ -272,44 +234,7 @@ namespace copilot_deneme.ViewModels
             _payloadHumidityValue.Add(new ObservableValue(value));
             if (_payloadHumidityValue.Count > MaxDataPoints) _payloadHumidityValue.RemoveAt(0);
         }
-
-        // Yeni metotlar - jiroskop ve açý için
-        public void addGyroXValue(float value)
-        {
-            _gyroXValue.Add(new ObservableValue(value));
-            if (_gyroXValue.Count > MaxDataPoints) _gyroXValue.RemoveAt(0);
-        }
         
-        public void addGyroYValue(float value)
-        {
-            _gyroYValue.Add(new ObservableValue(value));
-            if (_gyroYValue.Count > MaxDataPoints) _gyroYValue.RemoveAt(0);
-        }
-        
-        public void addGyroZValue(float value)
-        {
-            _gyroZValue.Add(new ObservableValue(value));
-            if (_gyroZValue.Count > MaxDataPoints) _gyroZValue.RemoveAt(0);
-        }
-        
-        public void addAccelXValue(float value)
-        {
-            _accelXValue.Add(new ObservableValue(value));
-            if (_accelXValue.Count > MaxDataPoints) _accelXValue.RemoveAt(0);
-        }
-        
-        public void addAccelYValue(float value)
-        {
-            _accelYValue.Add(new ObservableValue(value));
-            if (_accelYValue.Count > MaxDataPoints) _accelYValue.RemoveAt(0);
-        }
-        
-        public void addAngleValue(float value)
-        {
-            _angleValue.Add(new ObservableValue(value));
-            if (_angleValue.Count > MaxDataPoints) _angleValue.RemoveAt(0);
-        }
-
         public void UpdateStatus(string status)
         {
             StatusText = status;

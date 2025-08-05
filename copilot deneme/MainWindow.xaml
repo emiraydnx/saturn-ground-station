@@ -128,11 +128,6 @@
                             <ImageIcon Source="/Assets/rocket-128.png"/>
                         </NavigationViewItem.Icon>
                     </NavigationViewItem>
-                    <NavigationViewItem Content="HYİ Testi" Tag="HYİ">
-                        <NavigationViewItem.Icon>
-                            <ImageIcon Source="/Assets/notebook-128.png"/>
-                        </NavigationViewItem.Icon>
-                    </NavigationViewItem>
                 </NavigationView.MenuItems>
                 
                 <Frame x:Name="ContentFrame"/>

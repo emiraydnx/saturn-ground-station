@@ -83,133 +83,65 @@
                       VerticalScrollBarVisibility="Auto"
                       Margin="16,8,16,16">
             
-            <StackPanel Spacing="16" MaxWidth="800">
+            <StackPanel Spacing="16" MaxWidth="1050">
                 
                 
                 <!-- Serial Port Settings Card -->
                 <Border Style="{StaticResource SettingCardStyle}"
                         Translation="0,0,8">
-                    <StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
-                            <FontIcon Glyph="&#xE8F1;" 
-                                      Foreground="{StaticResource AccentBrush}"
-                                      Style="{StaticResource StatusIconStyle}"
-                                      />
-                            <TextBlock Text="Seri Port Ayarları" 
-                                       Style="{StaticResource SettingTitleStyle}"
-                                       HorizontalAlignment="Left"
-                                       Margin="0,10,0,0"/>
-                           
+                    <StackPanel Orientation="Vertical" Spacing="16">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Giriş Portu" Style="{ThemeResource TitleTextBlockStyle}" HorizontalAlignment="Center"/>
+                            <TextBlock Grid.Column="2" Text="Çıkış Portu" Style="{ThemeResource TitleTextBlockStyle}" HorizontalAlignment="Center"/>
+                        </Grid>
+
+                        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <ComboBox x:Name="PortComboBox_Input" Header="COM Port" Width="120" />
+                            <ComboBox x:Name="BaudRateComboBox_Input" Header="Baud Rate" Width="120" SelectedIndex="4">
+                                <ComboBoxItem Content="9600"/>
+                                <ComboBoxItem Content="19200"/>
+                                <ComboBoxItem Content="38400"/>
+                                <ComboBoxItem Content="57600"/>
+                                <ComboBoxItem Content="115200"/>
+                            </ComboBox>
+                            <Button Content="Bağlan" Click="ConnectInputPort_Click" VerticalAlignment="Bottom"/>
+                            <Button Content="Bağlantıyı Kes" Click="DisconnectInputPort_Click" VerticalAlignment="Bottom"/>
+
+                            <Border BorderBrush="{StaticResource SecondaryBrush}" BorderThickness="1" Height="40" Margin="24,0" VerticalAlignment="Bottom"/>
+
+                            <ComboBox x:Name="PortComboBox_Output" Header="COM Port" Width="120"/>
+                            <ComboBox x:Name="BaudRateComboBox_Output" Header="Baud Rate" Width="120"  SelectedIndex="4">
+                                <ComboBoxItem Content="9600"/>
+                                <ComboBoxItem Content="19200"/>
+                                <ComboBoxItem Content="38400"/>
+                                <ComboBoxItem Content="57600"/>
+                                <ComboBoxItem Content="115200"/>
+                            </ComboBox>
+                            <Button Content="Bağlan" Click="ConnectOutputPort_Click" VerticalAlignment="Bottom"/>
+                            <Button Content="Bağlantıyı Kes" Click="DisconnectOutputPort_Click" VerticalAlignment="Bottom"/>
                         </StackPanel>
-                        
-                        
+
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            
-                            
-                            <!-- Port Selection -->
-                            <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                                <TextBlock Text="Port Seçimi" 
-                                           Style="{StaticResource SettingLabelStyle}"/>
-                                <ComboBox x:Name="PortComboBox" 
-                                          Style="{StaticResource SettingComboBoxStyle}"
-                                          PlaceholderText="Port seçiniz..."/>
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="5" HorizontalAlignment="Center">
+                                <Ellipse x:Name="StatusIndicator_Input" Width="15" Height="15" Fill="Red"/>
+                                <TextBlock x:Name="StatusText_Input" Text="Giriş Portu Kapalı" VerticalAlignment="Center"/>
                             </StackPanel>
-                            
-                            <!-- Baud Rate Selection -->
-                            <StackPanel Grid.Column="1" Margin="8,0,0,0">
-                                <TextBlock Text="Baud Rate" 
-                                           Style="{StaticResource SettingLabelStyle}"/>
-                                <ComboBox x:Name="BaudRateComboBox" 
-                                          Style="{StaticResource SettingComboBoxStyle}"
-                                          SelectedIndex="4"
-                                          PlaceholderText="Baud rate seçiniz...">
-                                    <ComboBoxItem Content="9600"/>
-                                    <ComboBoxItem Content="19200"/>
-                                    <ComboBoxItem Content="38400"/>
-                                    <ComboBoxItem Content="57600"/>
-                                    <ComboBoxItem Content="115200"/>
-                                </ComboBox>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="5" HorizontalAlignment="Center">
+                                <Ellipse x:Name="StatusIndicator_Output" Width="15" Height="15" Fill="Red"/>
+                                <TextBlock x:Name="StatusText_Output" Text="Çıkış Portu Kapalı" VerticalAlignment="Center"/>
                             </StackPanel>
-                            <!-- Status Indicator -->
-                            <Border Background="{StaticResource DarkBrush}" 
-       CornerRadius="8" 
-       Padding="10,8" 
-       BorderBrush="{StaticResource SecondaryBrush}"
-       BorderThickness="1"
-       Grid.Column="2"
-       HorizontalAlignment="Center"
-       VerticalAlignment="Center">
-                                <StackPanel Orientation="Horizontal">
-                                    <Ellipse x:Name="StatusIndicator" 
-               Width="12" Height="12" 
-               Fill="{StaticResource PrimaryBrush}" 
-               Margin="0,0,12,0"/>
-                                    <TextBlock x:Name="StatusText" 
-                 Text="Port bağlantısı kapalı"
-                 FontSize="14"
-                 Foreground="{StaticResource SecondaryBrush}"/>
-                                </StackPanel>
-                            </Border>
-
                         </Grid>
-                        
-                        <!-- Buttons -->
-                        <StackPanel Orientation="Horizontal" 
-                                    HorizontalAlignment="Center" 
-                                    Spacing="16" 
-                                    Margin="0,16,0,0">
-                            <Button Content="Port Aç" 
-                                    Style="{StaticResource SettingButtonStyle}"
-                                    Background="{StaticResource SuccessBrush}"
-                                    Foreground="White"
-                                    Click="OpenPort_Click">
-                                <Button.ContentTemplate>
-                                    <DataTemplate>
-                                        <StackPanel Orientation="Horizontal">
-                                            <FontIcon Glyph="&#xE8E5;" FontSize="14" Margin="0,0,8,0"/>
-                                            <TextBlock Text="Port Aç"/>
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </Button.ContentTemplate>
-                            </Button>
-                            
-                            <Button Content="Port Kapat" 
-                                    Style="{StaticResource SettingButtonStyle}"
-                                    Background="{StaticResource PrimaryBrush}"
-                                    Foreground="White"
-                                    Click="ClosePort_Click">
-                                <Button.ContentTemplate>
-                                    <DataTemplate>
-                                        <StackPanel Orientation="Horizontal">
-                                            <FontIcon Glyph="&#xE8BB;" FontSize="14" Margin="0,0,8,0"/>
-                                            <TextBlock Text="Port Kapat"/>
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </Button.ContentTemplate>
-                            </Button>
-                            
-                            <Button Content="Yenile" 
-                                    Style="{StaticResource SettingButtonStyle}"
-                                    Background="{StaticResource DarkBrush}"
-                                    Foreground="White"
-                                    BorderBrush="{StaticResource SecondaryBrush}"
-                                    BorderThickness="1"
-                                    Click="RefreshPorts_Click">
-                                <Button.ContentTemplate>
-                                    <DataTemplate>
-                                        <StackPanel Orientation="Horizontal">
-                                            <FontIcon Glyph="&#xE72C;" FontSize="14" Margin="0,0,8,0"/>
-                                            <TextBlock Text="Yenile"/>
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </Button.ContentTemplate>
-                            </Button>
-                        </StackPanel>
+
+                        <Button Content="Portları Yenile" Click="RefreshPorts_Click" Margin="0,10,0,0" HorizontalAlignment="Center"/>
                     </StackPanel>
                 </Border>
                 

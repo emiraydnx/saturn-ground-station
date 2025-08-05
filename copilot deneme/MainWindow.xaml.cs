@@ -28,8 +28,7 @@ namespace copilot_deneme
             { typeof(HomePage), 0 },
             { typeof(ChartPage), 1 },
             { typeof(SettingPage), 2 },
-            { typeof(sitPage), 3 },
-            { typeof(HYI), 4 }
+            { typeof(sitPage), 3 }  
         };
 
         public MainWindow()
@@ -270,10 +269,6 @@ namespace copilot_deneme
                     
                     case "test":
                         targetPageType = typeof(sitPage);
-                        break;
-                        
-                    case "HYÝ":
-                        targetPageType = typeof(HYI);
                         break;
                 }
 

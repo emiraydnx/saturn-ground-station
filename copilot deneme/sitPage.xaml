@@ -241,6 +241,15 @@
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
+                            <TextBlock Text="GPS İrtifa:" Style="{StaticResource DataLabelStyle}"/>
+                            <TextBlock x:Name="PayloadGPSAltitudeText" Grid.Row="1" Text="0.00 m" Style="{StaticResource DataValueStyle}"/>
+                        </Grid>
+
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
                             <TextBlock Text="Enlem:" Style="{StaticResource DataLabelStyle}"/>
                             <TextBlock x:Name="PayloadLatitudeText" Grid.Row="1" Text="0.000000" Style="{StaticResource DataValueStyle}" FontSize="11"/>
                         </Grid>

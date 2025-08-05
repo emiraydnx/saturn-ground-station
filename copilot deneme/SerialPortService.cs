@@ -1,572 +1,806 @@
 using copilot_deneme.ViewModels;
 using Microsoft.UI.Dispatching;
 using System;
-using System.Globalization;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO.Ports;
-
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
 namespace copilot_deneme
 {
-    public static class SerialPortService
+    public class SerialPortService : ISerialPortService
     {
-        private static SerialPort? _serialPort;
-        private static string _buffer = string.Empty;
+        private readonly ILogger<SerialPortService>? _logger;
+        private SerialPort? _inputPort;
+        private SerialPort? _outputPort;
+        private readonly ConcurrentQueue<byte[]> _dataQueue = new();
+        private readonly CancellationTokenSource _cancellationTokenSource = new();
+        private Task? _processingTask;
         
-        public static SerialPort? SerialPort             
-        {
-            get => _serialPort;
-            set => _serialPort = value;
-        }
+        // Thread-safe buffer
+        private readonly object _bufferLock = new object();
+        private readonly List<byte> _binaryBuffer = new List<byte>();
 
-        public static ChartViewModel? ViewModel { get; set; }
-        public static DispatcherQueue? Dispatcher { get; set; }
+        // Configuration constants
+        private const int HYI_PACKET_SIZE = 78;
+        private static readonly byte[] HYI_HEADER = { 0xFF, 0xFF, 0x54, 0x52 };
+        private const int ROCKET_PACKET_SIZE = 64;
+        private static readonly byte[] ROCKET_HEADER = { 0xAB, 0xBC, 0x12, 0x13 };
+        private const int PAYLOAD_PACKET_SIZE = 34;
+        private static readonly byte[] PAYLOAD_HEADER = { 0xCD, 0xDF, 0x14, 0x15 };
         
-        // Yeni event handler - ham veri için
-        public static event Action<string>? OnDataReceived;
-        
-        // sitPage için telemetri veri eventi
-        public static event Action<TelemetryUpdateData>? OnTelemetryDataUpdated;
+        private const int MAX_BUFFER_SIZE = 4096; // Buffer overflow korumasÄ±
 
-        // 3D Model yönelim verisi için yeni event handler 
-        public static event Action<float, float, float>? OnRotationDataReceived;
-
-        public static void Initialize(string portName, int baudRate)
+        public SerialPortService(ILogger<SerialPortService>? logger = null)
         {
-            System.Diagnostics.Debug.WriteLine($"Initializing SerialPort with port:{portName}, baudRate:{baudRate}");
-            SerialPort = new SerialPort
-            {
-                PortName = portName,
-                BaudRate = baudRate,
-                DataBits = 8,
-                Parity = Parity.None,
-                StopBits = StopBits.One
-            };
-            System.Diagnostics.Debug.WriteLine("SerialPort initialized");
+            _logger = logger;
         }
 
-        public static void StartReading()
-        {
-            if (SerialPort == null)
-                throw new InvalidOperationException("Serial port must be initialized before starting");
+        #region Properties
+        public ChartViewModel? ViewModel { get; set; }
+        public DispatcherQueue? Dispatcher { get; set; }
+        #endregion
 
-            // Event handler'ý her zaman ekle (duplicate kontrolü yap)
-            SerialPort.DataReceived -= SerialPort_DataReceived; // Önce kaldýr
-            SerialPort.DataReceived += SerialPort_DataReceived; // Sonra ekle
-            
-            if (!SerialPort.IsOpen)
-            {
-                SerialPort.Open();
-            }
-            
-            System.Diagnostics.Debug.WriteLine($"StartReading called - Port open: {SerialPort.IsOpen}, Event handler added");
-        }
+        #region Events
+        public event Action<string>? OnDataReceived;
+        public event Action<PayloadTelemetryData>? OnPayloadDataUpdated;
+        public event Action<RocketTelemetryData>? OnRocketDataUpdated;
+        public event Action<HYITelemetryData>? OnHYIPacketReceived;
+        public event Action<float, float, float>? OnRotationDataReceived;
+        public event Action<RocketTelemetryData, PayloadTelemetryData>? OnTelemetryDataUpdated;
+        public event Action<string>? OnError; // Yeni hata event'i
+        #endregion
 
-        public static void StopReading()
-        {
-            if (SerialPort?.IsOpen == true)
-            {
-                SerialPort.DataReceived -= SerialPort_DataReceived;
-                SerialPort.Close();
-            }
-        }
-
-        private static void SerialPort_DataReceived(object sender, SerialDataReceivedEventArgs e)
+        public async Task InitializeAsync(string portName, int baudRate)
         {
             try
             {
-                // Mevcut buffer'daki tüm veriyi oku
-                string availableData = SerialPort.ReadExisting();
-                System.Diagnostics.Debug.WriteLine($"Raw Serial Data: '{availableData}'");
+                _logger?.LogInformation("SerialPort baÅŸlatÄ±lÄ±yor: {PortName}, {BaudRate}", portName, baudRate);
 
-                // Ham veriyi event ile gönder
-                OnDataReceived?.Invoke(availableData);
+                await DisposePortAsync(_inputPort);
 
-                // Chart verilerini iþle (comma-separated format)
-                ProcessArduinoData(availableData);
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error in SerialPort_DataReceived: {ex.Message}");
-                OnDataReceived?.Invoke($"ERROR: {ex.Message}");
-            }
-        }
-
-        private static void ProcessArduinoData(string receivedData)
-        {
-            try
-            {
-                _buffer += receivedData;
-
-                // Satýrlarý ayýr
-                string[] lines = _buffer.Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-                
-                // Son satýr eksik olabilir, onu buffer'da býrak
-                if (!_buffer.EndsWith('\n') && !_buffer.EndsWith('\r') && lines.Length > 0)
+                _inputPort = new SerialPort
                 {
-                    _buffer = lines[lines.Length - 1];
-                    Array.Resize(ref lines, lines.Length - 1);
-                }
-                else
-                {
-                    _buffer = string.Empty;
-                }
-
-                foreach (string line in lines)
-                {
-                    if (!string.IsNullOrWhiteSpace(line))
-                    {
-                        ProcessDataLine(line.Trim());
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error in ProcessArduinoData: {ex.Message}");
-            }
-        }
-
-        private static void ProcessDataLine(string data)
-        {
-            try
-            {
-                System.Diagnostics.Debug.WriteLine($"Processing line: '{data}'");
-
-                if (data.StartsWith("YPR,")) // <--- YENÝ
-                {
-                    ProcessRotationData(data); // <--- YENÝ
-                    return; // Bu veri iþlendi, diðer kontrollere gerek yok. // <--- YENÝ
-                }
-
-                // Önce key:value formatýný kontrol et
-                if (data.Contains(':'))
-                {
-                    ProcessKeyValueData(data);
-                    return;
-                }
-
-                // Comma-separated formatýný iþle
-                string[] parcalar = data.Split(',');
-                
-                if (parcalar.Length < 16)
-                {
-                    System.Diagnostics.Debug.WriteLine($"Beklenen 16 veri, alýnan: {parcalar.Length}");
-                    return;
-                }
-
-                // InvariantCulture kullan - nokta (.) ondalýk ayýrýcý olarak
-                var culture = CultureInfo.InvariantCulture;
-
-                // Arduino'dan gelen veri sýrasýna göre parse et
-                ushort paketSayaci = (ushort)TryParseFloat(parcalar[0], culture, 0);      // 0: paketSayaci
-                float irtifa = TryParseFloat(parcalar[1], culture, 0);                     // 1: irtifa (Roket Ýrtifa)
-                float roketGpsIrtifa = TryParseFloat(parcalar[2], culture, 0);             // 2: roketGpsIrtifa
-                float roketGpsEnlem = TryParseFloat(parcalar[3], culture, 0);              // 3: roketGpsEnlem
-                float roketGpsBoylam = TryParseFloat(parcalar[4], culture, 0);             // 4: roketGpsBoylam
-                float payloadGpsIrtifa = TryParseFloat(parcalar[5], culture, 0);           // 5: payloadGpsIrtifa (Payload Ýrtifa)
-                float payloadGpsEnlem = TryParseFloat(parcalar[6], culture, 0);            // 6: payloadGpsEnlem
-                float payloadGpsBoylam = TryParseFloat(parcalar[7], culture, 0);           // 7: payloadGpsBoylam
-                float jiroskopX = TryParseFloat(parcalar[8], culture, 0);                  // 8: jiroskopX
-                float jiroskopY = TryParseFloat(parcalar[9], culture, 0);                  // 9: jiroskopY
-                float jiroskopZ = TryParseFloat(parcalar[10], culture, 0);                 // 10: jiroskopZ
-                float ivmeX = TryParseFloat(parcalar[11], culture, 0);                     // 11: ivmeX
-                float ivmeY = TryParseFloat(parcalar[12], culture, 0);                     // 12: ivmeY
-                float ivmeZ = TryParseFloat(parcalar[13], culture, 0);                     // 13: ivmeZ (Z Ývmesi)
-                float aci = TryParseFloat(parcalar[14], culture, 0);                       // 14: aci
-                byte durum = (byte)TryParseFloat(parcalar[15], culture, 0);                // 15: durum
-
-                System.Diagnostics.Debug.WriteLine($"Successfully parsed - Roket Ýrtifa: {irtifa}, Payload Ýrtifa: {payloadGpsIrtifa}, Z Ývmesi: {ivmeZ}");
-
-                // Chart'lara doðru veri sýrasýyla ekle
-                UpdateCharts(irtifa, roketGpsIrtifa, payloadGpsIrtifa, ivmeZ, 
-                           jiroskopX, jiroskopY, jiroskopZ, ivmeX, ivmeY, aci, durum, paketSayaci);
-                
-                // sitPage için telemetri verilerini gönder
-                NotifySitPage(irtifa, roketGpsIrtifa, roketGpsEnlem, roketGpsBoylam,
-                             payloadGpsIrtifa, payloadGpsEnlem, payloadGpsBoylam,
-                             jiroskopX, jiroskopY, jiroskopZ, ivmeX, ivmeY, ivmeZ, aci);
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error parsing Arduino data: {ex.Message}");
-                System.Diagnostics.Debug.WriteLine($"Raw data was: '{data}'");
-            }
-        }
-
-        // 3D model için YPR verisini iþleyen yeni metod // <--- YENÝ
-        private static void ProcessRotationData(string data)
-        {
-            try
-            {
-                // "YPR," etiketini kaldýrýp kalan kýsmý virgüllerden ayýr
-                string[] values = data.Substring(4).Split(',');
-
-                if (values.Length == 3)
-                {
-                    var culture = CultureInfo.InvariantCulture;
-                    float yaw = TryParseFloat(values[0], culture, 0);
-                    float pitch = TryParseFloat(values[1], culture, 0);
-                    float roll = TryParseFloat(values[2], culture, 0);
-
-                    // Yeni event'i tetikle
-                    OnRotationDataReceived?.Invoke(yaw, pitch, roll);
-                    System.Diagnostics.Debug.WriteLine($"Rotation Data Parsed - Yaw: {yaw}, Pitch: {pitch}, Roll: {roll}");
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error parsing rotation data: {ex.Message}");
-            }
-        }
-
-
-        private static void NotifySitPage(float roketIrtifa, float roketGpsIrtifa, float roketGpsEnlem, float roketGpsBoylam,
-                                         float payloadIrtifa, float payloadGpsEnlem, float payloadGpsBoylam,
-                                         float jiroskopX, float jiroskopY, float jiroskopZ,
-                                         float ivmeX, float ivmeY, float ivmeZ, float aci)
-        {
-            try
-            {
-                // Telemetri verilerini hazýrla
-                var telemetryData = new TelemetryUpdateData
-                {
-                    RocketAltitude = roketIrtifa,
-                    RocketGpsAltitude = roketGpsIrtifa,
-                    RocketLatitude = roketGpsEnlem,
-                    RocketLongitude = roketGpsBoylam,
-                    PayloadAltitude = payloadIrtifa,
-                    PayloadLatitude = payloadGpsEnlem,
-                    PayloadLongitude = payloadGpsBoylam,
-                    GyroX = jiroskopX,
-                    GyroY = jiroskopY,
-                    GyroZ = jiroskopZ,
-                    AccelX = ivmeX,
-                    AccelY = ivmeY,
-                    AccelZ = ivmeZ,
-                    Angle = aci,
-                    // Chart'lardan gelen sabit deðerler
-                    RocketSpeed = 0,           // Hesaplanmýyor, 0
-                    PayloadSpeed = 0,          // Hesaplanmýyor, 0
-                    RocketTemperature = 25,    // Sabit deðer
-                    PayloadTemperature = 25,   // Sabit deðer
-                    RocketPressure = 1013,     // Deniz seviyesi basýncý
-                    PayloadPressure = 1013,    // Deniz seviyesi basýncý
-                    PayloadHumidity = 50       // Sabit nem deðeri
+                    PortName = portName,
+                    BaudRate = baudRate,
+                    DataBits = 8,
+                    Parity = Parity.None,
+                    StopBits = StopBits.One,
+                    ReadTimeout = 1000,
+                    WriteTimeout = 1000
                 };
 
-                // sitPage'e telemetri verilerini bildir
-                OnTelemetryDataUpdated?.Invoke(telemetryData);
+                _logger?.LogInformation("SerialPort baÅŸarÄ±yla baÅŸlatÄ±ldÄ±");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "SerialPort baÅŸlatma hatasÄ±");
+                OnError?.Invoke($"Port baÅŸlatma hatasÄ±: {ex.Message}");
+                throw;
+            }
+        }
+
+        // Sync wrapper for backward compatibility
+        public void Initialize(string portName, int baudRate)
+        {
+            InitializeAsync(portName, baudRate).GetAwaiter().GetResult();
+        }
+
+        public async Task StartReadingAsync()
+        {
+            if (_inputPort == null)
+            {
+                var error = "Serial port baÅŸlatÄ±lmadan Ã¶nce Initialize Ã§aÄŸrÄ±lmalÄ±";
+                _logger?.LogError(error);
+                throw new InvalidOperationException(error);
+            }
+
+            try
+            {
+                _inputPort.DataReceived -= SerialPort_DataReceived;
+                _inputPort.DataReceived += SerialPort_DataReceived;
+
+                if (!_inputPort.IsOpen)
+                {
+                    await Task.Run(() => _inputPort.Open());
+                }
+
+                // Background processing task baÅŸlat
+                _processingTask = ProcessDataQueueAsync(_cancellationTokenSource.Token);
+
+                _logger?.LogInformation("SerialPort okuma baÅŸlatÄ±ldÄ± - Port aÃ§Ä±k: {IsOpen}", _inputPort.IsOpen);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "SerialPort okuma baÅŸlatma hatasÄ±");
+                OnError?.Invoke($"Port okuma hatasÄ±: {ex.Message}");
+                throw;
+            }
+        }
+
+        public void StartReading()
+        {
+            StartReadingAsync().GetAwaiter().GetResult();
+        }
+
+        private async Task ProcessDataQueueAsync(CancellationToken cancellationToken)
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                try
+                {
+                    if (_dataQueue.TryDequeue(out byte[]? data))
+                    {
+                        lock (_bufferLock)
+                        {
+                            _binaryBuffer.AddRange(data);
+                            
+                            // Buffer overflow korumasÄ±
+                            if (_binaryBuffer.Count > MAX_BUFFER_SIZE)
+                            {
+                                var removeCount = _binaryBuffer.Count - MAX_BUFFER_SIZE;
+                                _binaryBuffer.RemoveRange(0, removeCount);
+                                _logger?.LogWarning("Buffer overflow, {Count} byte silindi", removeCount);
+                            }
+                        }
+                        
+                        ProcessBinaryBuffer();
+                    }
+                    else
+                    {
+                        await Task.Delay(1, cancellationToken); // CPU kullanÄ±mÄ±nÄ± azalt
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "Veri iÅŸleme hatasÄ±");
+                    OnError?.Invoke($"Veri iÅŸleme hatasÄ±: {ex.Message}");
+                }
+            }
+        }
+
+        public async Task WriteAsync(byte[] data)
+        {
+            if (_inputPort == null || !_inputPort.IsOpen)
+            {
+                var error = "Yazma iÅŸlemi iÃ§in port aÃ§Ä±k deÄŸil";
+                _logger?.LogError(error);
+                throw new InvalidOperationException(error);
+            }
+
+            try
+            {
+                await Task.Run(() => _inputPort.Write(data, 0, data.Length));
+                _logger?.LogDebug("{Count} byte yazÄ±ldÄ±", data.Length);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Veri yazma hatasÄ±");
+                OnError?.Invoke($"Veri yazma hatasÄ±: {ex.Message}");
+                throw;
+            }
+        }
+
+        public void Write(byte[] data)
+        {
+            WriteAsync(data).GetAwaiter().GetResult();
+        }
+
+        private void SerialPort_DataReceived(object sender, SerialDataReceivedEventArgs e)
+        {
+            try
+            {
+                if (_inputPort == null) return;
+
+                int bytesToRead = _inputPort.BytesToRead;
+                if (bytesToRead == 0) return;
+
+                byte[] tempBuffer = new byte[bytesToRead];
+                int bytesRead = _inputPort.Read(tempBuffer, 0, bytesToRead);
+
+                if (bytesRead > 0)
+                {
+                    // Queue'ya ekle, async iÅŸlem iÃ§in
+                    _dataQueue.Enqueue(tempBuffer.Take(bytesRead).ToArray());
+                    
+                    // String data event'i
+                    string dataAsString = System.Text.Encoding.UTF8.GetString(tempBuffer, 0, bytesRead);
+                    OnDataReceived?.Invoke(dataAsString);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "SerialPort veri alma hatasÄ±");
+                OnError?.Invoke($"Veri alma hatasÄ±: {ex.Message}");
+            }
+        }
+
+        // Improved packet processing with better error handling
+        private void ProcessBinaryBuffer()
+        {
+            try
+            {
+                lock (_bufferLock)
+                {
+                    ProcessHYIPackets();
+                    ProcessPayloadTelemetryPackets();
+                    ProcessRocketTelemetryPackets();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Binary buffer iÅŸleme hatasÄ±");
+                OnError?.Invoke($"Paket iÅŸleme hatasÄ±: {ex.Message}");
+            }
+        }
+
+        // Generic packet processor
+        private void ProcessPackets<T>(byte[] header, int packetSize, 
+            Func<byte[], T?> parser, Action<T> onDataReceived, string packetType) where T : class
+        {
+            while (_binaryBuffer.Count >= packetSize)
+            {
+                int headerIndex = FindHeader(_binaryBuffer, header);
+
+                if (headerIndex == -1)
+                {
+                    if (_binaryBuffer.Count > header.Length)
+                        _binaryBuffer.RemoveAt(0);
+                    else
+                        break;
+                    continue;
+                }
+
+                if (headerIndex > 0)
+                {
+                    _logger?.LogDebug("{PacketType} Header {Index} pozisyonunda bulundu", packetType, headerIndex);
+                    _binaryBuffer.RemoveRange(0, headerIndex);
+                    continue;
+                }
+
+                if (_binaryBuffer.Count < packetSize)
+                    break;
+
+                byte[] packet = _binaryBuffer.GetRange(0, packetSize).ToArray();
+                var telemetryData = parser(packet);
+
+                if (telemetryData != null)
+                {
+                    Dispatcher?.TryEnqueue(() => onDataReceived(telemetryData));
+                }
+
+                _binaryBuffer.RemoveRange(0, packetSize);
+            }
+        }
+
+        public async Task StopReadingAsync()
+        {
+            try
+            {
+                _cancellationTokenSource.Cancel();
                 
-                System.Diagnostics.Debug.WriteLine($"sitPage'e telemetri verisi gönderildi - Roket: {roketIrtifa:F2}m, Payload: {payloadIrtifa:F2}m");
+                if (_processingTask != null)
+                {
+                    await _processingTask;
+                }
+
+                if (_inputPort?.IsOpen == true)
+                {
+                    _inputPort.DataReceived -= SerialPort_DataReceived;
+                    _inputPort.Close();
+                }
+
+                _logger?.LogInformation("SerialPort okuma durduruldu");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error notifying sitPage: {ex.Message}");
+                _logger?.LogError(ex, "SerialPort durdurma hatasÄ±");
             }
         }
 
-        private static void ProcessKeyValueData(string data)
+        public void StopReading()
         {
-            var parts = data.Split(':', 2);
-            if (parts.Length != 2)
-                return;
-
-            string key = parts[0].Trim();
-            string valueStr = parts[1].Trim();
-
-            if (!float.TryParse(valueStr, NumberStyles.Any, CultureInfo.InvariantCulture, out float parsedValue))
-                return;
-
-            Dispatcher?.TryEnqueue(() =>
-            {
-                switch (key)
-                {
-                    case "rocketAltitude":
-                        ViewModel?.AddRocketAltitudeValue(parsedValue);
-                        break;
-                    case "payloadAltitude":
-                        ViewModel?.addPayloadAltitudeValue(parsedValue);
-                        break;
-                    case "rocketAccelZ":
-                        ViewModel?.addRocketAccelZValue(parsedValue);
-                        break;
-                    case "payloadAccelZ":
-                        ViewModel?.addPayloadAccelZValue(parsedValue);
-                        break;
-                    case "rocketSpeed":
-                        ViewModel?.addRocketSpeedValue(parsedValue);
-                        break;
-                    case "payloadSpeed":
-                        ViewModel?.addPayloadSpeedValue(parsedValue);
-                        break;
-                    case "rocketTemperature":
-                        ViewModel?.addRocketTempValue(parsedValue);
-                        break;
-                    case "payloadTemperature":
-                        ViewModel?.addPayloadTempValue(parsedValue);
-                        break;
-                    case "rocketPressure":
-                        ViewModel?.addRocketPressureValue(parsedValue);
-                        break;
-                    case "payloadPressure":
-                        ViewModel?.addPayloadPressureValue(parsedValue);
-                        break;
-                    case "payloadHumidity":
-                        ViewModel?.addPayloadHumidityValue(parsedValue);
-                        break;
-                    default:
-                        System.Diagnostics.Debug.WriteLine($"Bilinmeyen anahtar alýndý: {key}");
-                        break;
-                }
-            });
+            StopReadingAsync().GetAwaiter().GetResult();
         }
 
-        private static void UpdateCharts(float roketIrtifa, float roketGpsIrtifa, float payloadIrtifa, 
-            float ivmeZ, float jiroskopX, float jiroskopY, float jiroskopZ, 
-            float ivmeX, float ivmeY, float aci, byte durum, ushort paketSayaci)
+        private async Task DisposePortAsync(SerialPort? port)
         {
-            Dispatcher?.TryEnqueue(() =>
+            if (port != null)
             {
                 try
                 {
-                    if (ViewModel != null)
+                    if (port.IsOpen)
                     {
-                        // Direkt sensör verilerini chart'lara ekle - hesaplama yok
-                        ViewModel.AddRocketAltitudeValue(roketIrtifa);        // Roket irtifa sensörü
-                        ViewModel.addPayloadAltitudeValue(payloadIrtifa);     // Payload irtifa sensörü
-                        
-                        ViewModel.addRocketAccelZValue(ivmeZ);                // Roket Z ivme sensörü
-                        ViewModel.addPayloadAccelZValue(ivmeZ);               // Payload Z ivme sensörü (ayný sensör)
-                        
-                        // Diðer sensör verileri - direkt olarak
-                        ViewModel.addRocketSpeedValue(0);                     // Hýz sensörü yok, 0
-                        ViewModel.addPayloadSpeedValue(0);                    // Hýz sensörü yok, 0
-                        
-                        ViewModel.addRocketTempValue(25);                     // Sýcaklýk sensörü yok, sabit deðer
-                        ViewModel.addPayloadTempValue(25);                    // Sýcaklýk sensörü yok, sabit deðer
-                        
-                        ViewModel.addRocketPressureValue(1013);               // Basýnç sensörü yok, deniz seviyesi
-                        ViewModel.addPayloadPressureValue(1013);              // Basýnç sensörü yok, deniz seviyesi
-                        
-                        ViewModel.addPayloadHumidityValue(50);                // Nem sensörü yok, sabit deðer
-                        
-                        // Yeni sensör verileri - jiroskop ve ivme
-                        ViewModel.addGyroXValue(jiroskopX);                   // Jiroskop X
-                        ViewModel.addGyroYValue(jiroskopY);                   // Jiroskop Y
-                        ViewModel.addGyroZValue(jiroskopZ);                   // Jiroskop Z
-                        ViewModel.addAccelXValue(ivmeX);                      // Ývme X
-                        ViewModel.addAccelYValue(ivmeY);                      // Ývme Y
-                        ViewModel.addAngleValue(aci);                         // Açý
-                        
-                        ViewModel.UpdateStatus($"Serial verisi: {DateTime.Now:HH:mm:ss} - Paket: {paketSayaci}");
-                        
-                        // Tüm sensör verilerini debug'a yazdýr
-                        System.Diagnostics.Debug.WriteLine($"SERIAL VERÝLERÝ - Paket: {paketSayaci}");
-                        System.Diagnostics.Debug.WriteLine($"  Roket Ýrtifa: {roketIrtifa:F2} m");
-                        System.Diagnostics.Debug.WriteLine($"  Roket GPS Ýrtifa: {roketGpsIrtifa:F2} m");
-                        System.Diagnostics.Debug.WriteLine($"  Payload GPS Ýrtifa: {payloadIrtifa:F2} m");
-                        System.Diagnostics.Debug.WriteLine($"  Jiroskop X: {jiroskopX:F2}, Y: {jiroskopY:F2}, Z: {jiroskopZ:F2}");
-                        System.Diagnostics.Debug.WriteLine($"  Ývme X: {ivmeX:F2}, Y: {ivmeY:F2}, Z: {ivmeZ:F2}");
-                        System.Diagnostics.Debug.WriteLine($"  Açý: {aci:F2}°, Durum: {durum}");
-                        System.Diagnostics.Debug.WriteLine("---");
+                        await Task.Run(() => port.Close());
                     }
-                    else
-                    {
-                        System.Diagnostics.Debug.WriteLine("ViewModel is null!");
-                    }
+                    port.Dispose();
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Error updating charts: {ex.Message}");
+                    _logger?.LogError(ex, "Port dispose hatasÄ±");
                 }
-            });
+            }
         }
 
-        // Yeni metod: Harici sayfalardan chart güncellemesi için
-        public static void UpdateChartsFromExternalData(float rocketAltitude, float payloadAltitude, 
-            float rocketAccelZ, float payloadAccelZ, float rocketSpeed, float payloadSpeed,
-            float rocketTemp, float payloadTemp, float rocketPressure, float payloadPressure, 
-            float payloadHumidity, string source = "External")
+        public bool IsPortOpen() => _inputPort?.IsOpen == true;
+
+        public string GetPortInfo()
         {
-            Dispatcher?.TryEnqueue(() =>
-            {
-                try
-                {
-                    if (ViewModel != null)
-                    {
-                        ViewModel.AddRocketAltitudeValue(rocketAltitude);
-                        ViewModel.addPayloadAltitudeValue(payloadAltitude);
-                        
-                        ViewModel.addRocketAccelZValue(rocketAccelZ);
-                        ViewModel.addPayloadAccelZValue(payloadAccelZ);
-                        
-                        ViewModel.addRocketSpeedValue(rocketSpeed);
-                        ViewModel.addPayloadSpeedValue(payloadSpeed);
-                        
-                        ViewModel.addRocketTempValue(rocketTemp);
-                        ViewModel.addPayloadTempValue(payloadTemp);
-                        
-                        ViewModel.addRocketPressureValue(rocketPressure);
-                        ViewModel.addPayloadPressureValue(payloadPressure);
-                        
-                        ViewModel.addPayloadHumidityValue(payloadHumidity);
-                        
-                        ViewModel.UpdateStatus($"{source} verisi: {DateTime.Now:HH:mm:ss}");
-                        
-                        System.Diagnostics.Debug.WriteLine($"{source} verisi chart'lara eklendi - Roket: {rocketAltitude:F2}m, Payload: {payloadAltitude:F2}m");
-                    }
-                    else
-                    {
-                        System.Diagnostics.Debug.WriteLine($"{source}: ViewModel bulunamadý!");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"{source} chart güncelleme hatasý: {ex.Message}");
-                }
-            });
+            if (_inputPort == null)
+                return "Port baÅŸlatÄ±lmamÄ±ÅŸ";
+
+            return $"Port: {_inputPort.PortName}, BaudRate: {_inputPort.BaudRate}, IsOpen: {_inputPort.IsOpen}";
         }
 
-        // Yeni metod: Harici sayfalardan chart güncellemesi için - geniþletilmiþ versiyon
-        public static void UpdateChartsFromExternalData(float rocketAltitude, float payloadAltitude, 
-            float rocketAccelZ, float payloadAccelZ, float rocketSpeed, float payloadSpeed,
-            float rocketTemp, float payloadTemp, float rocketPressure, float payloadPressure, 
+        public void UpdateChartsFromExternalData(float rocketAltitude, float payloadAltitude,
+            float accelX, float accelY, float accelZ, float rocketSpeed, float payloadSpeed,
+            float rocketTemp, float payloadTemp, float rocketPressure, float payloadPressure,
             float payloadHumidity, string source = "External",
-            float gyroX = 0, float gyroY = 0, float gyroZ = 0,
-            float accelX = 0, float accelY = 0, float angle = 0)
+            float rocketAccelX = 0, float rocketAccelY = 0)
         {
             Dispatcher?.TryEnqueue(() =>
             {
                 try
                 {
-                    if (ViewModel != null)
+                    if (ViewModel == null)
                     {
-                        // Temel sensör verileri
-                        ViewModel.AddRocketAltitudeValue(rocketAltitude);
-                        ViewModel.addPayloadAltitudeValue(payloadAltitude);
-                        
-                        ViewModel.addRocketAccelZValue(rocketAccelZ);
-                        ViewModel.addPayloadAccelZValue(payloadAccelZ);
-                        
-                        ViewModel.addRocketSpeedValue(rocketSpeed);
-                        ViewModel.addPayloadSpeedValue(payloadSpeed);
-                        
-                        ViewModel.addRocketTempValue(rocketTemp);
-                        ViewModel.addPayloadTempValue(payloadTemp);
-                        
-                        ViewModel.addRocketPressureValue(rocketPressure);
-                        ViewModel.addPayloadPressureValue(payloadPressure);
-                        
-                        ViewModel.addPayloadHumidityValue(payloadHumidity);
-                        
-                        // Yeni sensör verileri - jiroskop ve açý
-                        ViewModel.addGyroXValue(gyroX);
-                        ViewModel.addGyroYValue(gyroY);
-                        ViewModel.addGyroZValue(gyroZ);
-                        ViewModel.addAccelXValue(accelX);
-                        ViewModel.addAccelYValue(accelY);
-                        ViewModel.addAngleValue(angle);
-                        
-                        ViewModel.UpdateStatus($"{source} verisi: {DateTime.Now:HH:mm:ss}");
-                        
-                        System.Diagnostics.Debug.WriteLine($"{source} TÜM VERÝLER chart'lara eklendi:");
-                        System.Diagnostics.Debug.WriteLine($"  Roket: {rocketAltitude:F2}m, Payload: {payloadAltitude:F2}m");
-                        System.Diagnostics.Debug.WriteLine($"  Jiroskop X:{gyroX:F2}, Y:{gyroY:F2}, Z:{gyroZ:F2}");
-                        System.Diagnostics.Debug.WriteLine($"  Ývme X:{accelX:F2}, Y:{accelY:F2}, Z:{rocketAccelZ:F2}");
-                        System.Diagnostics.Debug.WriteLine($"  Açý: {angle:F2}°");
+                        _logger?.LogWarning("{Source}: ViewModel is null!", source);
+                        return;
                     }
-                    else
-                    {
-                        System.Diagnostics.Debug.WriteLine($"{source}: ViewModel bulunamadý!");
-                    }
+
+                    UpdateViewModelData(rocketAltitude, payloadAltitude,
+                        rocketSpeed, payloadSpeed, rocketTemp, payloadTemp, rocketPressure,
+                        payloadPressure, payloadHumidity, accelX, accelY, accelZ);
+
+                    ViewModel.UpdateStatus($"{source} verisi: {DateTime.Now:HH:mm:ss}");
+
+                    _logger?.LogDebug("{Source} tÃ¼m veriler chart'lara eklendi", source);
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"{source} chart güncelleme hatasý: {ex.Message}");
+                    _logger?.LogError(ex, "{Source} chart gÃ¼ncelleme hatasÄ±", source);
+                    OnError?.Invoke($"{source} chart gÃ¼ncelleme hatasÄ±: {ex.Message}");
                 }
             });
         }
 
-        private static float TryParseFloat(string value, CultureInfo culture, float defaultValue)
-        {
-            if (float.TryParse(value?.Trim(), culture, out float result))
-                return result;
-            return defaultValue;
-        }
-
-        public static bool IsPortOpen()
-        {
-            return SerialPort?.IsOpen == true;
-        }
-
-        public static string GetPortInfo()
-        {
-            if (SerialPort == null)
-                return "Port not initialized";
-
-            return $"Port: {SerialPort.PortName}, BaudRate: {SerialPort.BaudRate}, IsOpen: {SerialPort.IsOpen}";
-        }
-
-        public static void Dispose()
+        #region Output Port Methods (Backward Compatibility)
+        public async Task InitializeOutputPortAsync(string portName, int baudRate)
         {
             try
             {
-                StopReading();
-                SerialPort?.Dispose();
-                SerialPort = null;
+                _logger?.LogInformation("Output Port baÅŸlatÄ±lÄ±yor: {PortName}, {BaudRate}", portName, baudRate);
+
+                await DisposePortAsync(_outputPort);
+
+                _outputPort = new SerialPort
+                {
+                    PortName = portName,
+                    BaudRate = baudRate,
+                    DataBits = 8,
+                    Parity = Parity.None,
+                    StopBits = StopBits.One,
+                    ReadTimeout = 1000,
+                    WriteTimeout = 1000
+                };
+
+                await Task.Run(() => _outputPort.Open());
+                _logger?.LogInformation("Output Port baÅŸarÄ±yla baÅŸlatÄ±ldÄ± ve aÃ§Ä±ldÄ±");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error disposing SerialPort: {ex.Message}");
+                _logger?.LogError(ex, "Output port baÅŸlatma hatasÄ±");
+                OnError?.Invoke($"Output port baÅŸlatma hatasÄ±: {ex.Message}");
+                throw;
             }
         }
 
-        // Test için public metod
-        public static void TriggerTestData(string testData)
+        public async Task WriteToOutputPortAsync(byte[] data)
+        {
+            if (_outputPort == null || !_outputPort.IsOpen)
+                throw new InvalidOperationException("Output port aÃ§Ä±k deÄŸil.");
+
+            try
+            {
+                await Task.Run(() => _outputPort.Write(data, 0, data.Length));
+                _logger?.LogDebug("Output port'a {Count} byte gÃ¶nderildi", data.Length);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Output port yazma hatasÄ±");
+                OnError?.Invoke($"Output port yazma hatasÄ±: {ex.Message}");
+                throw;
+            }
+        }
+
+        public bool IsOutputPortOpen() => _outputPort?.IsOpen == true;
+
+        public async Task CloseOutputPortAsync()
         {
             try
             {
-                System.Diagnostics.Debug.WriteLine($"Triggering test data: {testData}");
-                OnDataReceived?.Invoke(testData);
-                ProcessArduinoData(testData);
+                await DisposePortAsync(_outputPort);
+                _outputPort = null;
+                _logger?.LogInformation("Output port kapatÄ±ldÄ±");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error triggering test data: {ex.Message}");
+                _logger?.LogError(ex, "Output port kapatma hatasÄ±");
             }
         }
+        #endregion
+
+        public async ValueTask DisposeAsync()
+        {
+            try
+            {
+                await StopReadingAsync();
+                await DisposePortAsync(_inputPort);
+                await DisposePortAsync(_outputPort);
+                
+                _cancellationTokenSource.Dispose();
+                
+                lock (_bufferLock)
+                {
+                    _binaryBuffer.Clear();
+                }
+
+                _logger?.LogInformation("SerialPortService dispose edildi");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Dispose hatasÄ±");
+            }
+        }
+
+        // Validation methods
+        private static bool IsValidPacket(byte[] packet, byte[] expectedHeader)
+        {
+            if (packet.Length < expectedHeader.Length)
+                return false;
+
+            for (int i = 0; i < expectedHeader.Length; i++)
+            {
+                if (packet[i] != expectedHeader[i])
+                    return false;
+            }
+            return true;
+        }
+
+        // Rest of the existing methods with improved error handling...
+        private static int FindHeader(List<byte> buffer, byte[] header)
+        {
+            for (int i = 0; i <= buffer.Count - header.Length; i++)
+            {
+                bool match = true;
+                for (int j = 0; j < header.Length; j++)
+                {
+                    if (buffer[i + j] != header[j])
+                    {
+                        match = false;
+                        break;
+                    }
+                }
+                if (match)
+                    return i;
+            }
+            return -1;
+        }
+
+        // Improved packet processing methods...
+        private void ProcessHYIPackets()
+        {
+            ProcessPackets(HYI_HEADER, HYI_PACKET_SIZE, ParseHYIData, 
+                data => {
+                    OnHYIPacketReceived?.Invoke(data);
+                    
+                    // HYI paketini output port'a forward et
+                    if (IsOutputPortOpen())
+                    {
+                        Task.Run(async () =>
+                        {
+                            try
+                            {
+                                byte[] packet = new byte[HYI_PACKET_SIZE];
+                                // HYI paketini yeniden oluÅŸtur
+                                await WriteToOutputPortAsync(packet);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger?.LogError(ex, "HYI paket forward hatasÄ±");
+                            }
+                        });
+                    }
+                }, "HYI");
+        }
+
+        private void ProcessPayloadTelemetryPackets()
+        {
+            ProcessPackets(PAYLOAD_HEADER, PAYLOAD_PACKET_SIZE, ParsePayloadData,
+                data => {
+                    OnPayloadDataUpdated?.Invoke(data);
+                    CheckAndFireTelemetryUpdate(null, data);
+                }, "Payload");
+        }
+
+        private void ProcessRocketTelemetryPackets()
+        {
+            ProcessPackets(ROCKET_HEADER, ROCKET_PACKET_SIZE, ParseRocketData,
+                data => {
+                    OnRocketDataUpdated?.Invoke(data);
+                    CheckAndFireTelemetryUpdate(data, null);
+                    
+                    // Rotation data event'ini fÄ±rlatmak iÃ§in
+                    OnRotationDataReceived?.Invoke(data.GyroX, data.GyroY, data.GyroZ);
+                }, "Rocket");
+        }
+
+        private RocketTelemetryData? _lastRocketData;
+        private PayloadTelemetryData? _lastPayloadData;
+
+        private void CheckAndFireTelemetryUpdate(RocketTelemetryData? rocketData, PayloadTelemetryData? payloadData)
+        {
+            if (rocketData != null) _lastRocketData = rocketData;
+            if (payloadData != null) _lastPayloadData = payloadData;
+
+            if (_lastRocketData != null && _lastPayloadData != null)
+            {
+                OnTelemetryDataUpdated?.Invoke(_lastRocketData, _lastPayloadData);
+                UpdateCharts(_lastRocketData, _lastPayloadData);
+            }
+        }
+
+        private void UpdateCharts(RocketTelemetryData rocketTelemetry, PayloadTelemetryData payloadTelemetry)
+        {
+            Dispatcher?.TryEnqueue(() =>
+            {
+                try
+                {
+                    if (ViewModel == null)
+                        return;
+
+                    UpdateViewModelData(rocketTelemetry.RocketAltitude, payloadTelemetry.PayloadAltitude,
+                        rocketTelemetry.RocketSpeed, payloadTelemetry.PayloadSpeed,
+                        rocketTelemetry.RocketTemperature, payloadTelemetry.PayloadTemperature,
+                        rocketTelemetry.RocketPressure, payloadTelemetry.PayloadPressure,
+                        payloadTelemetry.PayloadHumidity,
+                        rocketTelemetry.AccelX, rocketTelemetry.AccelY, rocketTelemetry.AccelZ);
+
+                    ViewModel.UpdateStatus($"Serial verisi: {DateTime.Now:HH:mm:ss} - Paket: {rocketTelemetry.PacketCounter}");
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "Chart gÃ¼ncelleme hatasÄ±");
+                }
+            });
+        }
+
+        private void UpdateViewModelData(float rocketAltitude, float payloadAltitude,
+            float rocketSpeed, float payloadSpeed, float rocketTemp, float payloadTemp, 
+            float rocketPressure, float payloadPressure, float payloadHumidity, 
+            float accelX, float accelY, float accelZ)
+        {
+            if (ViewModel == null)
+            {
+                _logger?.LogWarning("UpdateViewModelData: ViewModel is null!");
+                return;
+            }
+
+            ViewModel.AddRocketAltitudeValue(rocketAltitude);
+            ViewModel.addPayloadAltitudeValue(payloadAltitude);
+            ViewModel.addRocketAccelXValue(accelX);
+            ViewModel.addRocketAccelYValue(accelY);
+            ViewModel.addRocketAccelZValue(accelZ);
+            ViewModel.addRocketSpeedValue(rocketSpeed);
+            ViewModel.addPayloadSpeedValue(payloadSpeed);
+            ViewModel.addRocketTempValue(rocketTemp);
+            ViewModel.addPayloadTempValue(payloadTemp);
+            ViewModel.addRocketPressureValue(rocketPressure);
+            ViewModel.addPayloadPressureValue(payloadPressure);
+            ViewModel.addPayloadHumidityValue(payloadHumidity);
+
+            _logger?.LogDebug("ViewModel gÃ¼ncellendi - Roket Alt: {RocketAlt:F2}, Payload Alt: {PayloadAlt:F2}", 
+                rocketAltitude, payloadAltitude);
+        }
+
+        // Existing parsing methods remain the same...
+        private static HYITelemetryData ParseHYIData(byte[] packet)
+        {
+            if (!IsValidPacket(packet, HYI_HEADER))
+                throw new ArgumentException("Invalid HYI packet header");
+
+            return new HYITelemetryData
+            {
+                TeamId = packet[4],
+                PacketCounter = packet[5],
+                Altitude = BitConverter.ToSingle(packet, 6),
+                RocketGpsAltitude = BitConverter.ToSingle(packet, 10),
+                RocketLatitude = BitConverter.ToSingle(packet, 14),
+                RocketLongitude = BitConverter.ToSingle(packet, 18),
+                PayloadGpsAltitude = BitConverter.ToSingle(packet, 22),
+                PayloadLatitude = BitConverter.ToSingle(packet, 26),
+                PayloadLongitude = BitConverter.ToSingle(packet, 30),
+                StageGpsAltitude = BitConverter.ToSingle(packet, 34),
+                StageLatitude = BitConverter.ToSingle(packet, 38),
+                StageLongitude = BitConverter.ToSingle(packet, 42),
+                GyroscopeX = BitConverter.ToSingle(packet, 46),
+                GyroscopeY = BitConverter.ToSingle(packet, 50),
+                GyroscopeZ = BitConverter.ToSingle(packet, 54),
+                AccelerationX = BitConverter.ToSingle(packet, 58),
+                AccelerationY = BitConverter.ToSingle(packet, 62),
+                AccelerationZ = BitConverter.ToSingle(packet, 66),
+                Angle = BitConverter.ToSingle(packet, 70),
+                Status = packet[74],
+                CRC = packet[75]
+            };
+        }
+
+        private static RocketTelemetryData? ParseRocketData(byte[] packet)
+        {
+            try
+            {
+                if (!IsValidPacket(packet, ROCKET_HEADER))
+                    return null;
+
+                var data = new RocketTelemetryData
+                {
+                    PacketCounter = packet[4],
+                    RocketAltitude = BitConverter.ToSingle(packet, 5),
+                    RocketGpsAltitude = BitConverter.ToSingle(packet, 9),
+                    RocketLatitude = BitConverter.ToSingle(packet, 13),
+                    RocketLongitude = BitConverter.ToSingle(packet, 17),
+                    GyroX = BitConverter.ToSingle(packet, 21),
+                    GyroY = BitConverter.ToSingle(packet, 25),
+                    GyroZ = BitConverter.ToSingle(packet, 29),
+                    AccelX = BitConverter.ToSingle(packet, 33),
+                    AccelY = BitConverter.ToSingle(packet, 37),
+                    AccelZ = BitConverter.ToSingle(packet, 41),
+                    Angle = BitConverter.ToSingle(packet, 45),
+                    RocketTemperature = BitConverter.ToSingle(packet, 49),
+                    RocketPressure = BitConverter.ToSingle(packet, 53),
+                    RocketSpeed = BitConverter.ToSingle(packet, 57),
+                    status = packet[61],
+                    CRC = packet[62],
+                    TeamID = 255,
+                };
+
+                // CRC validation
+                byte calculatedCRC = CalculateSimpleCRC(packet, 4, 57);
+                if (calculatedCRC != packet[62])
+                {
+                    Debug.WriteLine("Rocket telemetry CRC hatasÄ±!");
+                }
+
+                return data;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Rocket telemetry parse hatasÄ±: {ex.Message}");
+                return null;
+            }
+        }
+
+        private static PayloadTelemetryData? ParsePayloadData(byte[] packet)
+        {
+            try
+            {
+                if (!IsValidPacket(packet, PAYLOAD_HEADER))
+                    return null;
+
+                var data = new PayloadTelemetryData
+                {
+                    PacketCounter = packet[4],
+                    PayloadAltitude = BitConverter.ToSingle(packet, 5),
+                    PayloadGpsAltitude = BitConverter.ToSingle(packet, 9),
+                    PayloadLatitude = BitConverter.ToSingle(packet, 13),
+                    PayloadLongitude = BitConverter.ToSingle(packet, 17),
+                    PayloadSpeed = BitConverter.ToSingle(packet, 21),
+                    PayloadTemperature = BitConverter.ToSingle(packet, 25),
+                    PayloadPressure = BitConverter.ToSingle(packet, 29),
+                    PayloadHumidity = BitConverter.ToSingle(packet, 33),
+                    CRC = packet[37],
+                };
+
+                // CRC validation
+                byte calculatedCRC = CalculateSimpleCRC(packet, 4, 33);
+                if (calculatedCRC != packet[37])
+                {
+                    Debug.WriteLine("Payload telemetry CRC hatasÄ±!");
+                }
+
+                return data;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Payload telemetry parse hatasÄ±: {ex.Message}");
+                return null;
+            }
+        }
+
+        private static byte CalculateChecksum(byte[] data, int offset, int length)
+        {
+            int sum = 0;
+            for (int i = offset; i < offset + length; i++)
+            {
+                sum += data[i];
+            }
+            return (byte)(sum % 256);
+        }
+
+        private static byte CalculateSimpleCRC(byte[] data, int offset, int length)
+        {
+            byte crc = 0;
+            for (int i = offset; i < offset + length; i++)
+            {
+                crc ^= data[i];
+            }
+            return crc;
+        }
+
+        // Data classes remain the same...
+        public class RocketTelemetryData
+        {
+            public float RocketAltitude { get; set; }
+            public float RocketGpsAltitude { get; set; }
+            public float RocketLatitude { get; set; }
+            public float RocketLongitude { get; set; }
+            public float GyroX { get; set; }
+            public float GyroY { get; set; }
+            public float GyroZ { get; set; }
+            public float AccelX { get; set; }
+            public float AccelY { get; set; }
+            public float AccelZ { get; set; }
+            public float Angle { get; set; }
+            public float RocketSpeed { get; set; }
+            public float RocketTemperature { get; set; }  
+            public float RocketPressure { get; set; }
+            public byte CRC { get; set; }
+            public byte TeamID { get; set; }
+            public byte status { get; set; }
+            public byte PacketCounter { get; set; }
+        }
+            
+        public class PayloadTelemetryData
+        {
+            public float PayloadGpsAltitude { get; set; }
+            public float PayloadAltitude { get; set; }
+            public float PayloadLatitude { get; set; }
+            public float PayloadLongitude { get; set; }
+            public float PayloadSpeed { get; set; }
+            public float PayloadTemperature { get; set; }
+            public float PayloadPressure { get; set; }
+            public float PayloadHumidity { get; set; }
+            public byte CRC { get; set; }
+            public byte PacketCounter { get; set; }
+        }
+
+        public class HYITelemetryData
+        {
+            public byte TeamId { get; set; }
+            public byte PacketCounter { get; set; }
+            public float Altitude { get; set; }
+            public float RocketGpsAltitude { get; set; }
+            public float RocketLatitude { get; set; }
+            public float RocketLongitude { get; set; }
+            public float PayloadGpsAltitude { get; set; }
+            public float PayloadLatitude { get; set; }
+            public float PayloadLongitude { get; set; }
+            public float StageGpsAltitude { get; set; }
+            public float StageLatitude { get; set; }
+            public float StageLongitude { get; set; }
+            public float GyroscopeX { get; set; }
+            public float GyroscopeY { get; set; }
+            public float GyroscopeZ { get; set; }
+            public float AccelerationX { get; set; }
+            public float AccelerationY { get; set; }
+            public float AccelerationZ { get; set; }
+            public float Angle { get; set; }
+            public byte Status { get; set; }
+            public byte CRC { get; set; }
+        }
     }
-
-    // sitPage için telemetri veri sýnýfý
-    public class TelemetryUpdateData
-    {
-        public float RocketAltitude { get; set; }
-        public float RocketGpsAltitude { get; set; }
-        public float RocketLatitude { get; set; }
-        public float RocketLongitude { get; set; }
-        public float PayloadAltitude { get; set; }
-        public float PayloadLatitude { get; set; }
-        public float PayloadLongitude { get; set; }
-        public float GyroX { get; set; }
-        public float GyroY { get; set; }
-        public float GyroZ { get; set; }
-        public float AccelX { get; set; }
-        public float AccelY { get; set; }
-        public float AccelZ { get; set; }
-        public float Angle { get; set; }
-        public float RocketSpeed { get; set; }
-        public float PayloadSpeed { get; set; }
-        public float RocketTemperature { get; set; }
-        public float PayloadTemperature { get; set; }
-        public float RocketPressure { get; set; }
-        public float PayloadPressure { get; set; }
-        public float PayloadHumidity { get; set; }
-        public byte CRC { get; set; }
-        public byte TeamID { get; set; }
-        public byte status { get; set; } 
-        public byte PacketCounter { get; set; } // Yeni: Paket sayacý
-
-    }
-
-    
-   
 }
