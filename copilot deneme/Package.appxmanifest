@@ -9,7 +9,7 @@
 	<Identity
 	  Name="1b6dc9df-a503-47ce-80fc-939951bc772c"
 	  Publisher="CN=Emirhan"
-	  Version="1.0.0.0" />
+	  Version="1.0.1.0" />
 
 	<mp:PhoneIdentity PhoneProductId="1b6dc9df-a503-47ce-80fc-939951bc772c" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
