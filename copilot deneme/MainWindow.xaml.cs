@@ -28,7 +28,8 @@ namespace copilot_deneme
             { typeof(HomePage), 0 },
             { typeof(ChartPage), 1 },
             { typeof(SettingPage), 2 },
-            { typeof(sitPage), 3 }  
+            { typeof(sitPage), 3 },
+            { typeof(ArduinoPage), 4 }
         };
 
         public MainWindow()
@@ -269,6 +270,10 @@ namespace copilot_deneme
                     
                     case "test":
                         targetPageType = typeof(sitPage);
+                        break;
+                    
+                    case "arduino":
+                        targetPageType = typeof(ArduinoPage);
                         break;
                 }
 

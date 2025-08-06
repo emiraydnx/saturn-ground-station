@@ -21,6 +21,9 @@
             <SolidColorBrush x:Key="DarkBrush" Color="#1A1A2E"/>
             <SolidColorBrush x:Key="CardBrush" Color="#16213E"/>
             <SolidColorBrush x:Key="SuccessBrush" Color="#06FFA5"/>
+            <SolidColorBrush x:Key="WarningBrush" Color="#FFA500"/>
+            <SolidColorBrush x:Key="DangerBrush" Color="#FF4444"/>
+            <SolidColorBrush x:Key="ErrorBrush" Color="#DC3545"/>
             
             <!-- ImageBrush Resources -->
             <ImageBrush x:Key="TitleBarLogoBrush" ImageSource="ms-appx:///Assets/IMG-20241205-WA0001(1).jpg" Stretch="UniformToFill"/>
