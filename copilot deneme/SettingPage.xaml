@@ -1,4 +1,3 @@
-<?xml version="1.0" encoding="utf-8"?>
 <Page
     x:Class="copilot_deneme.SettingPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -145,6 +144,122 @@
                     </StackPanel>
                 </Border>
                 
+                <!-- Arduino Port Settings Card -->
+                <Border Style="{StaticResource SettingCardStyle}"
+                        Translation="0,0,8">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                            <FontIcon Glyph="&#xE968;" 
+                                      Foreground="#FF9500"
+                                      Style="{StaticResource StatusIconStyle}"/>
+                            <TextBlock Text="Arduino Sensör Bağlantısı" 
+                                       Style="{StaticResource SettingTitleStyle}"/>
+                        </StackPanel>
+                        
+                        <StackPanel Spacing="16">
+                            <TextBlock Text="Arduino BNO055 ve BMP388 sensörlerini manuel olarak bağlamak için aşağıdaki ayarları kullanın." 
+                                       Style="{StaticResource SettingLabelStyle}"
+                                       TextWrapping="Wrap"/>
+                            
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                
+                                <!-- Arduino Port Selection -->
+                                <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                                    <TextBlock Text="Arduino COM Port" 
+                                               Style="{StaticResource SettingLabelStyle}"/>
+                                    <ComboBox x:Name="ArduinoPortComboBox" 
+                                              Style="{StaticResource SettingComboBoxStyle}"/>
+                                </StackPanel>
+                                
+                                <!-- Arduino Baud Rate -->
+                                <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                                    <TextBlock Text="Baud Rate" 
+                                               Style="{StaticResource SettingLabelStyle}"/>
+                                    <ComboBox x:Name="ArduinoBaudRateComboBox" 
+                                              Style="{StaticResource SettingComboBoxStyle}"
+                                              SelectedIndex="4">
+                                        <ComboBoxItem Content="9600"/>
+                                        <ComboBoxItem Content="19200"/>
+                                        <ComboBoxItem Content="38400"/>
+                                        <ComboBoxItem Content="57600"/>
+                                        <ComboBoxItem Content="115200"/>
+                                    </ComboBox>
+                                </StackPanel>
+                                
+                                <!-- Arduino Status -->
+                                <StackPanel Grid.Column="2" Margin="8,0,0,0">
+                                    <TextBlock Text="Bağlantı Durumu" 
+                                               Style="{StaticResource SettingLabelStyle}"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                        <Ellipse x:Name="ArduinoStatusIndicator" Width="15" Height="15" Fill="Red"/>
+                                        <TextBlock x:Name="ArduinoStatusText" Text="Bağlı Değil" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Grid>
+                            
+                            <!-- Arduino Control Buttons -->
+                            <StackPanel Orientation="Horizontal" Spacing="16" HorizontalAlignment="Center">
+                                <Button x:Name="ConnectArduinoButton" 
+                                        Content="🔌 Arduino'ya Bağlan" 
+                                        Click="ConnectArduino_Click"
+                                        Style="{StaticResource SettingButtonStyle}"
+                                        Background="#FF9500"/>
+                                <Button x:Name="DisconnectArduinoButton" 
+                                        Content="🔌 Bağlantıyı Kes" 
+                                        Click="DisconnectArduino_Click"
+                                        Style="{StaticResource SettingButtonStyle}"
+                                        Background="{StaticResource DangerBrush}"
+                                        IsEnabled="False"/>
+                                <Button Content="🔄 Portları Yenile" 
+                                        Click="RefreshArduinoPorts_Click"
+                                        Style="{StaticResource SettingButtonStyle}"
+                                        Background="{StaticResource SecondaryBrush}"/>
+                            </StackPanel>
+                            
+                            <!-- Arduino Test Data -->
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Son Alınan Veriler:" 
+                                           Style="{StaticResource SettingLabelStyle}"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" x:Name="ArduinoYawText" Text="Yaw: --°" Foreground="#FFD93D" FontSize="12"/>
+                                    <TextBlock Grid.Column="1" x:Name="ArduinoPitchText" Text="Pitch: --°" Foreground="#06FFA5" FontSize="12"/>
+                                    <TextBlock Grid.Column="2" x:Name="ArduinoRollText" Text="Roll: --°" Foreground="#FF6B6B" FontSize="12"/>
+                                </Grid>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" x:Name="ArduinoAccelText" Text="İvme: -- m/s²" Foreground="#FF9500" FontSize="12"/>
+                                    <TextBlock Grid.Column="1" x:Name="ArduinoPressureText" Text="Basınç: -- hPa" Foreground="#9B59B6" FontSize="12"/>
+                                    <TextBlock Grid.Column="2" x:Name="ArduinoAltitudeText" Text="İrtifa: -- m" Foreground="#3498DB" FontSize="12"/>
+                                </Grid>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" x:Name="ArduinoTemperatureText" Text="Sıcaklık: --°C" Foreground="#E74C3C" FontSize="12"/>
+                                    <TextBlock Grid.Column="1" x:Name="ArduinoPressureRateText" Text="dP/dt: -- hPa/s" Foreground="#F39C12" FontSize="12"/>
+                                    <TextBlock Grid.Column="2" Text="" FontSize="12"/>
+                                </Grid>
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+                
                 <!-- Data Settings Card -->
                 <Border Style="{StaticResource SettingCardStyle}"
                         Translation="0,0,8">
@@ -203,6 +318,72 @@
                                 <ComboBoxItem Content="Mark"/>
                                 <ComboBoxItem Content="Space"/>
                             </ComboBox>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+                
+                <!-- HYI Test Settings Card -->
+                <Border Style="{StaticResource SettingCardStyle}"
+                        Translation="0,0,8">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                            <FontIcon Glyph="&#xE9D9;" 
+                                      Foreground="{StaticResource WarningBrush}"
+                                      Style="{StaticResource StatusIconStyle}"/>
+                            <TextBlock Text="🧪 HYI Test Modu" 
+                                       Style="{StaticResource SettingTitleStyle}"/>
+                        </StackPanel>
+                        
+                        <StackPanel Spacing="16">
+                            <TextBlock Text="HYI verilerini test etmek için random değerlerle simülasyon yapabilirsiniz." 
+                                       Style="{StaticResource SettingLabelStyle}"
+                                       TextWrapping="Wrap"/>
+                            
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                
+                                <!-- Interval Settings -->
+                                <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                                    <TextBlock Text="Veri Gönderim Aralığı (ms)" 
+                                               Style="{StaticResource SettingLabelStyle}"/>
+                                    <ComboBox x:Name="HyiIntervalComboBox" 
+                                              Style="{StaticResource SettingComboBoxStyle}"
+                                              SelectedIndex="1">
+                                        <ComboBoxItem Content="1000" Tag="1000"/>
+                                        <ComboBoxItem Content="2000" Tag="2000"/>
+                                        <ComboBoxItem Content="3000" Tag="3000"/>
+                                        <ComboBoxItem Content="5000" Tag="5000"/>
+                                    </ComboBox>
+                                </StackPanel>
+                                
+                                <!-- Test Status -->
+                                <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                                    <TextBlock Text="Test Durumu" 
+                                               Style="{StaticResource SettingLabelStyle}"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                        <Ellipse x:Name="HyiTestStatusIndicator" Width="15" Height="15" Fill="Red"/>
+                                        <TextBlock x:Name="HyiTestStatusText" Text="Durduruldu" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Grid>
+                            
+                            <!-- Control Buttons -->
+                            <StackPanel Orientation="Horizontal" Spacing="16" HorizontalAlignment="Center">
+                                <Button x:Name="StartHyiTestButton" 
+                                        Content="🚀 Test Başlat" 
+                                        Click="StartHyiTest_Click"
+                                        Style="{StaticResource SettingButtonStyle}"
+                                        Background="{StaticResource SuccessBrush}"/>
+                                <Button x:Name="StopHyiTestButton" 
+                                        Content="🛑 Test Durdur" 
+                                        Click="StopHyiTest_Click"
+                                        Style="{StaticResource SettingButtonStyle}"
+                                        Background="{StaticResource DangerBrush}"
+                                        IsEnabled="False"/>
+                            </StackPanel>
                         </StackPanel>
                     </StackPanel>
                 </Border>

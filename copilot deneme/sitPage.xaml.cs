@@ -227,7 +227,7 @@ namespace copilot_deneme
     </div>
     
     <script>
-        // Harita oluştur - Ankara merkezli
+        // Harita oluştur - Ankara merkezi
         var map = L.map('map').setView([39.925533, 32.866287], 13);
         
         // OpenStreetMap tile layer ekle
@@ -406,7 +406,7 @@ namespace copilot_deneme
                                $"{payloadAlt.ToString(CultureInfo.InvariantCulture)})";
                 
                 await MapWebView.ExecuteScriptAsync(script);
-                System.Diagnostics.Debug.WriteLine($"sitPage GPS pozisyonları güncellendi - Roket: {_currentRocketLat:F6}, {_currentRocketLon:F6} ({rocketAlt:F2}m) | Payload: {_currentPayloadLat:F6}, {_currentPayloadLon:F6} ({payloadAlt:F2}m)");
+                System.Diagnostics.Debug.WriteLine($"sitPage GPS pozisyonları güncellendi - Roket: {_currentRocketLat:F6}, {_currentRocketLon:F6} ({rocketAlt:F1}m) | Payload: {_currentPayloadLat:F6}, {_currentPayloadLon:F6} ({payloadAlt:F1}m)");
             }
             catch (Exception ex)
             {
@@ -508,7 +508,7 @@ namespace copilot_deneme
             // İlk değerleri ayarla
             LastUpdateText.Text = "Bağlantı bekleniyor...";
             DataCountText.Text = "0";
-            MaxAltitudeText.Text = "0.00 m";
+            MaxAltitudeText.Text = "0.0 m";
             CRCText.Text = "0";
             TeamIDText.Text = "0";
         }
@@ -531,8 +531,8 @@ namespace copilot_deneme
                     // Roket verileri - null kontrolü ile
                     if (rocketData != null)
                     {
-                        RocketAltitudeText.Text = $"{rocketData.RocketAltitude:F2} m";
-                        RocketGpsAltitudeText.Text = $"{rocketData.RocketGpsAltitude:F2} m";
+                        RocketAltitudeText.Text = $"{rocketData.RocketAltitude:F1} m";
+                        RocketGpsAltitudeText.Text = $"{rocketData.RocketGpsAltitude:F1} m";
                         RocketLatitudeText.Text = $"{rocketData.RocketLatitude:F6}";
                         RocketLongitudeText.Text = $"{rocketData.RocketLongitude:F6}";
                         RocketSpeedText.Text = $"{rocketData.RocketSpeed:F2} m/s";
@@ -554,8 +554,8 @@ namespace copilot_deneme
                     // Payload verileri
                     if (payloadData != null)
                     {
-                        PayloadAltitudeText.Text = $"{payloadData.PayloadAltitude:F2} m";
-                        PayloadGPSAltitudeText.Text = $"{payloadData.PayloadGpsAltitude:F2} m";
+                        PayloadAltitudeText.Text = $"{payloadData.PayloadAltitude:F1} m";
+                        PayloadGPSAltitudeText.Text = $"{payloadData.PayloadGpsAltitude:F1} m";
                         PayloadLatitudeText.Text = $"{payloadData.PayloadLatitude:F6}";
                         PayloadLongitudeText.Text = $"{payloadData.PayloadLongitude:F6}";
                         PayloadSpeedText.Text = $"{payloadData.PayloadSpeed:F2} m/s";
@@ -583,7 +583,7 @@ namespace copilot_deneme
                     _Counter = (_Counter + 1) % 256;
                     DataCountText.Text = _Counter.ToString();
 
-                    System.Diagnostics.Debug.WriteLine($"sitPage telemetri ve GPS güncellendi - Roket İrtifa: {rocketData?.RocketAltitude:F2}m, Payload İrtifa: {payloadData?.PayloadAltitude:F2}m");
+                    System.Diagnostics.Debug.WriteLine($"sitPage telemetri ve GPS güncellendi - Roket İrtifa: {rocketData?.RocketAltitude:F1}m, Payload İrtifa: {payloadData?.PayloadAltitude:F1}m");
                 }
                 catch (Exception ex)
                 {
@@ -597,21 +597,36 @@ namespace copilot_deneme
         {
             try
             {
-                // ViewModel varsa direkt güncelle
-                if (_viewModel != null && rocketData != null && payloadData != null)
+                // ViewModel varsa ve GERÇEKTENç VERİ VARSA güncelle
+                if (_viewModel != null)
                 {
-                    _viewModel.AddRocketAltitudeValue(rocketData.RocketAltitude);
-                    _viewModel.addPayloadAltitudeValue(payloadData.PayloadAltitude);
-                    _viewModel.addRocketAccelXValue(rocketData.AccelX);
-                    _viewModel.addRocketAccelYValue(rocketData.AccelY);
-                    _viewModel.addRocketAccelZValue(rocketData.AccelZ);
-                    _viewModel.addRocketSpeedValue(rocketData.RocketSpeed);
-                    _viewModel.addPayloadSpeedValue(payloadData.PayloadSpeed);
-                    _viewModel.addRocketTempValue(rocketData.RocketTemperature);
-                    _viewModel.addPayloadTempValue(payloadData.PayloadTemperature);
-                    _viewModel.addRocketPressureValue(rocketData.RocketPressure);
-                    _viewModel.addPayloadPressureValue(payloadData.PayloadPressure);
-                    _viewModel.addPayloadHumidityValue(payloadData.PayloadHumidity);
+                    // SADECE ROKET VERİSİ VAR VE GERÇEKSİ
+                    if (rocketData != null)
+                    {
+                        _viewModel.AddRocketAltitudeValue(rocketData.RocketAltitude);
+                        _viewModel.addRocketAccelXValue(rocketData.AccelX);
+                        _viewModel.addRocketAccelYValue(rocketData.AccelY);
+                        _viewModel.addRocketAccelZValue(rocketData.AccelZ);
+                        _viewModel.addRocketSpeedValue(rocketData.RocketSpeed);
+                        _viewModel.addRocketTempValue(rocketData.RocketTemperature);
+                        _viewModel.addRocketPressureValue(rocketData.RocketPressure);
+                    }
+                    
+                    // SADECE PAYLOAD VERİSİ VARSA VE GERÇEKSİ (dummy değilse)
+                    if (payloadData != null && payloadData.PacketCounter > 0) // Gerçek payload verisi kontrolü
+                    {
+                        _viewModel.addPayloadAltitudeValue(payloadData.PayloadAltitude);
+                        _viewModel.addPayloadSpeedValue(payloadData.PayloadSpeed);
+                        _viewModel.addPayloadTempValue(payloadData.PayloadTemperature);
+                        _viewModel.addPayloadPressureValue(payloadData.PayloadPressure);
+                        _viewModel.addPayloadHumidityValue(payloadData.PayloadHumidity);
+                        
+                        System.Diagnostics.Debug.WriteLine("sitPage: GERÇEİ PAYLOAD VERİSİ chart'a eklendi");
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine("sitPage: Payload dummy verisi - chart'a eklenmedi");
+                    }
                     
                     System.Diagnostics.Debug.WriteLine("sitPage chart verileri ViewModel'e gönderildi");
                 }
@@ -634,7 +649,7 @@ namespace copilot_deneme
                 if (currentMaxAltitude > _maxAltitude)
                 {
                     _maxAltitude = currentMaxAltitude;
-                    MaxAltitudeText.Text = $"{_maxAltitude:F2} m";
+                    MaxAltitudeText.Text = $"{_maxAltitude:F1} m";
                 }
 
                 // CRC değerini güncelle - önce roket sonra payload

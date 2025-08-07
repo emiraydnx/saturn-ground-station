@@ -128,6 +128,11 @@
                             <ImageIcon Source="/Assets/rocket-128.png"/>
                         </NavigationViewItem.Icon>
                     </NavigationViewItem>
+                    <NavigationViewItem Content="Arduino Sensörler" Tag="arduino">
+                        <NavigationViewItem.Icon>
+                            <FontIcon Glyph="&#xE968;" Foreground="#FF9500"/>
+                        </NavigationViewItem.Icon>
+                    </NavigationViewItem>
                 </NavigationView.MenuItems>
                 
                 <Frame x:Name="ContentFrame"/>
