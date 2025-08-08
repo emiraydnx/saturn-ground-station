@@ -24,19 +24,20 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="300"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
                 <!-- Header -->
                 <StackPanel Grid.Row="0" Margin="0,0,0,20">
-                    <TextBlock Text="Arduino Sensör Verileri" 
+                    <TextBlock Text="Arduino SensÃ¶r Verileri ve GPS Takip" 
                                FontSize="32" 
                                FontWeight="Bold" 
                                Foreground="#FFD93D" 
                                HorizontalAlignment="Center"
                                Margin="0,0,0,10"/>
                     
-                    <TextBlock Text="BNO055 (IMU) ve BMP388 (Barometric) Sensör Takibi" 
+                    <TextBlock Text="BNO055 (IMU), BMP388 (Barometric) ve GPS SensÃ¶r Takibi" 
                                FontSize="16" 
                                Foreground="#C7CEEA" 
                                HorizontalAlignment="Center"/>
@@ -65,7 +66,7 @@
                                      Fill="Red" 
                                      Margin="0,0,10,0"/>
                             <TextBlock x:Name="ConnectionStatusText" 
-                                       Text="Arduino Baðlantýsý Bekleniyor..." 
+                                       Text="Arduino BaÄŸlantÄ±sÄ± Bekleniyor..." 
                                        Foreground="White" 
                                        VerticalAlignment="Center"/>
                         </StackPanel>
@@ -73,14 +74,14 @@
                         <!-- Last Update Time -->
                         <TextBlock Grid.Column="1" 
                                    x:Name="LastUpdateText" 
-                                   Text="Son Güncelleme: --:--:--" 
+                                   Text="Son GÃ¼ncelleme: --:--:--" 
                                    Foreground="#C7CEEA" 
                                    Margin="20,0"
                                    VerticalAlignment="Center"/>
 
                         <!-- Data Counter -->
                         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="Veri Sayýsý: " 
+                            <TextBlock Text="Veri SayÄ±sÄ±: " 
                                        Foreground="#C7CEEA" 
                                        VerticalAlignment="Center"/>
                             <TextBlock x:Name="DataCountText" 
@@ -92,8 +93,68 @@
                     </Grid>
                 </Border>
 
+                <!-- GPS Map Section -->
+                <Border Grid.Row="2" 
+                        Background="#0F0F23" 
+                        BorderBrush="#06FFA5" 
+                        BorderThickness="2" 
+                        CornerRadius="10" 
+                        Margin="0,0,0,20"
+                        Padding="10">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Map Header -->
+                        <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,10">
+                            <TextBlock Text="ðŸ“ Arduino GPS Konumu" 
+                                       FontSize="18" 
+                                       FontWeight="Bold" 
+                                       Foreground="#06FFA5" 
+                                       VerticalAlignment="Center"/>
+                        </StackPanel>
+
+                        <!-- Map WebView -->
+                        <WebView2 Grid.Row="1" 
+                                  x:Name="ArduinoMapWebView" 
+                                  Height="220"/>
+
+                        <!-- GPS Info Panel -->
+                        <Grid Grid.Row="2" Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Current Coordinates -->
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Center">
+                                <TextBlock Text="Lat: " Foreground="#C7CEEA" FontSize="12"/>
+                                <TextBlock x:Name="CurrentLatitudeText" Text="---.------" Foreground="White" FontWeight="Bold" FontSize="12"/>
+                                <TextBlock Text=" | Lon: " Foreground="#C7CEEA" FontSize="12" Margin="5,0,0,0"/>
+                                <TextBlock x:Name="CurrentLongitudeText" Text="---.------" Foreground="White" FontWeight="Bold" FontSize="12"/>
+                            </StackPanel>
+
+                            <!-- GPS Status -->
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center">
+                                <TextBlock Text="GPS: " Foreground="#C7CEEA" FontSize="12"/>
+                                <TextBlock x:Name="GpsStatusText" Text="Bekleniyor..." Foreground="#FFD93D" FontWeight="Bold" FontSize="12"/>
+                            </StackPanel>
+
+                            <!-- Satellite Count -->
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Center">
+                                <TextBlock Text="Ä°rtifa: " Foreground="#C7CEEA" FontSize="12"/>
+                                <TextBlock x:Name="GpsAltitudeText" Text="0 m" Foreground="White" FontWeight="Bold" FontSize="12"/>
+                            </StackPanel>
+                        </Grid>
+                    </Grid>
+                </Border>
+
                 <!-- Charts Grid -->
-                <Grid Grid.Row="2">
+                <Grid Grid.Row="3">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="*"/>
@@ -120,7 +181,7 @@
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
                             
-                            <TextBlock Text="Yaw (Sapma Açýsý)" 
+                            <TextBlock Text="Yaw (Sapma AÃ§Ä±sÄ±)" 
                                        FontSize="14" 
                                        FontWeight="Bold" 
                                        Foreground="#FFD93D" 
@@ -134,7 +195,7 @@
                             
                             <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,3,0,0">
                                 <TextBlock Text="Mevcut: " Foreground="#C7CEEA" FontSize="11"/>
-                                <TextBlock x:Name="CurrentYawText" Text="0.0°" Foreground="White" FontWeight="Bold" FontSize="11"/>
+                                <TextBlock x:Name="CurrentYawText" Text="0.0Â°" Foreground="White" FontWeight="Bold" FontSize="11"/>
                             </StackPanel>
                         </Grid>
                     </Border>
@@ -154,7 +215,7 @@
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
                             
-                            <TextBlock Text="Pitch (Eðim Açýsý)" 
+                            <TextBlock Text="Pitch (EÄŸim AÃ§Ä±sÄ±)" 
                                        FontSize="14" 
                                        FontWeight="Bold" 
                                        Foreground="#06FFA5" 
@@ -168,7 +229,7 @@
                             
                             <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,3,0,0">
                                 <TextBlock Text="Mevcut: " Foreground="#C7CEEA" FontSize="11"/>
-                                <TextBlock x:Name="CurrentPitchText" Text="0.0°" Foreground="White" FontWeight="Bold" FontSize="11"/>
+                                <TextBlock x:Name="CurrentPitchText" Text="0.0Â°" Foreground="White" FontWeight="Bold" FontSize="11"/>
                             </StackPanel>
                         </Grid>
                     </Border>
@@ -188,7 +249,7 @@
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
                             
-                            <TextBlock Text="Roll (Yuvarlanma Açýsý)" 
+                            <TextBlock Text="Roll (Yuvarlanma AÃ§Ä±sÄ±)" 
                                        FontSize="14" 
                                        FontWeight="Bold" 
                                        Foreground="#FF6B6B" 
@@ -202,7 +263,7 @@
                             
                             <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,3,0,0">
                                 <TextBlock Text="Mevcut: " Foreground="#C7CEEA" FontSize="11"/>
-                                <TextBlock x:Name="CurrentRollText" Text="0.0°" Foreground="White" FontWeight="Bold" FontSize="11"/>
+                                <TextBlock x:Name="CurrentRollText" Text="0.0Â°" Foreground="White" FontWeight="Bold" FontSize="11"/>
                             </StackPanel>
                         </Grid>
                     </Border>
@@ -222,7 +283,7 @@
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
                             
-                            <TextBlock Text="Toplam Ývme" 
+                            <TextBlock Text="Toplam Ä°vme" 
                                        FontSize="14" 
                                        FontWeight="Bold" 
                                        Foreground="#FF9500" 
@@ -236,7 +297,7 @@
                             
                             <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,3,0,0">
                                 <TextBlock Text="Mevcut: " Foreground="#C7CEEA" FontSize="11"/>
-                                <TextBlock x:Name="CurrentAccelText" Text="0.0 m/s²" Foreground="White" FontWeight="Bold" FontSize="11"/>
+                                <TextBlock x:Name="CurrentAccelText" Text="0.0 m/sÂ²" Foreground="White" FontWeight="Bold" FontSize="11"/>
                             </StackPanel>
                         </Grid>
                     </Border>
@@ -256,7 +317,7 @@
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
                             
-                            <TextBlock Text="Basýnç (hPa)" 
+                            <TextBlock Text="BasÄ±nÃ§ (hPa)" 
                                        FontSize="14" 
                                        FontWeight="Bold" 
                                        Foreground="#9B59B6" 
@@ -290,7 +351,7 @@
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
                             
-                            <TextBlock Text="Ýrtifa (m)" 
+                            <TextBlock Text="Ä°rtifa (m)" 
                                        FontSize="14" 
                                        FontWeight="Bold" 
                                        Foreground="#3498DB" 
@@ -324,7 +385,7 @@
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
                             
-                            <TextBlock Text="Sýcaklýk (°C)" 
+                            <TextBlock Text="SÄ±caklÄ±k (Â°C)" 
                                        FontSize="14" 
                                        FontWeight="Bold" 
                                        Foreground="#E74C3C" 
@@ -338,7 +399,7 @@
                             
                             <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,3,0,0">
                                 <TextBlock Text="Mevcut: " Foreground="#C7CEEA" FontSize="11"/>
-                                <TextBlock x:Name="CurrentTemperatureText" Text="0.0°C" Foreground="White" FontWeight="Bold" FontSize="11"/>
+                                <TextBlock x:Name="CurrentTemperatureText" Text="0.0Â°C" Foreground="White" FontWeight="Bold" FontSize="11"/>
                             </StackPanel>
                         </Grid>
                     </Border>
@@ -358,7 +419,7 @@
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
                             
-                            <TextBlock Text="Basýnç Deðiþim Hýzý (hPa/s)" 
+                            <TextBlock Text="BasÄ±nÃ§ DeÄŸiÅŸim HÄ±zÄ± (hPa/s)" 
                                        FontSize="14" 
                                        FontWeight="Bold" 
                                        Foreground="#F39C12" 

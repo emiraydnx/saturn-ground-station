@@ -18,7 +18,6 @@ namespace copilot_deneme
         private readonly ChartViewModel _viewModel;
         private readonly DispatcherQueue _dispatcherQueue;
         private readonly SerialPortService _serialPortService;
-        private readonly SerialPortService _outputPortService;
         private SerialPort? _arduinoSerialPort; // Arduino için ayrı SerialPort
         private bool _isArduinoConnected = false;
 
@@ -31,15 +30,12 @@ namespace copilot_deneme
             _viewModel = new ChartViewModel();
             this.DataContext = _viewModel;
             
-            // SerialPortService instance'larını oluştur
+            // SerialPortService instance'ını oluştur
             _serialPortService = new SerialPortService();
-            _outputPortService = new SerialPortService();
             
             // ViewModel ve Dispatcher'ı ayarla
             _serialPortService.ViewModel = _viewModel;
             _serialPortService.Dispatcher = _dispatcherQueue;
-            _outputPortService.ViewModel = _viewModel;
-            _outputPortService.Dispatcher = _dispatcherQueue;
 
             // Event handler'ları kaydet - TÜM EVENT'LERİ EKLE
             try
@@ -49,7 +45,6 @@ namespace copilot_deneme
                 _serialPortService.OnPayloadDataUpdated += OnPayloadDataUpdated;
                 _serialPortService.OnTelemetryDataUpdated += OnTelemetryDataUpdated;
                 _serialPortService.OnError += OnSerialPortError;
-                _outputPortService.OnError += OnOutputPortError;
                 
                 System.Diagnostics.Debug.WriteLine("SettingPage: Tüm event handler'lar başarıyla kaydedildi");
             }
@@ -270,9 +265,8 @@ namespace copilot_deneme
                 
                 var baudRate = int.Parse(baudRateStr);
 
-                // Output port için ayrı SerialPortService instance kullan
-                await _outputPortService.InitializeAsync(portName, baudRate);
-                await _outputPortService.StartReadingAsync();
+                // Input SerialPortService'in output port'unu başlat
+                await _serialPortService.InitializeOutputPortAsync(portName, baudRate);
 
                 StatusIndicator_Output.Fill = new SolidColorBrush(Colors.LightGreen);
                 StatusText_Output.Text = $"HYI Output Aktif: {portName} ({baudRate})";
@@ -291,7 +285,7 @@ namespace copilot_deneme
         {
             try
             {
-                await _outputPortService.StopReadingAsync();
+                await _serialPortService.CloseOutputPortAsync();
                 StatusIndicator_Output.Fill = new SolidColorBrush(Colors.Red);
                 StatusText_Output.Text = "Çıkış Portu Kapalı";
                 System.Diagnostics.Debug.WriteLine("Output port kapatıldı");
@@ -311,7 +305,7 @@ namespace copilot_deneme
                 var selectedItem = HyiIntervalComboBox.SelectedItem as ComboBoxItem;
                 int interval = selectedItem?.Tag != null ? int.Parse(selectedItem.Tag.ToString()) : 2000;
                 
-                // HYI test modunu başlat
+                // HYI test modunu başlat (bu otomatik olarak IsAutoHyiGenerationEnabled'ı da true yapar)
                 _serialPortService.StartHyiTestMode(interval);
                 
                 // UI güncellemeleri
@@ -320,7 +314,10 @@ namespace copilot_deneme
                 StartHyiTestButton.IsEnabled = false;
                 StopHyiTestButton.IsEnabled = true;
                 
-                System.Diagnostics.Debug.WriteLine($"HYI Test modu başlatıldı - Interval: {interval}ms");
+                // Toggle'ı otomatik olarak aktif yap
+                AutoHyiGenerationToggle.IsOn = true;
+                
+                System.Diagnostics.Debug.WriteLine($"HYI Test modu başlatıldı - Interval: {interval}ms, Arduino->HYI üretimi aktif");
             }
             catch (Exception ex)
             {
@@ -342,12 +339,201 @@ namespace copilot_deneme
                 StartHyiTestButton.IsEnabled = true;
                 StopHyiTestButton.IsEnabled = false;
                 
+                // Otomatik HYI üretimi de kapanacak, toggle'ı güncelle
+                AutoHyiGenerationToggle.IsOn = false;
+                
                 System.Diagnostics.Debug.WriteLine("HYI Test modu durduruldu");
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"HYI Test durdurma hatası: {ex.Message}");
                 HyiTestStatusText.Text = $"Hata: {ex.Message}";
+            }
+        }
+
+        /// <summary>
+        /// ✨ YENİ: Arduino verilerinden otomatik HYI üretimi toggle kontrolü
+        /// </summary>
+        private void AutoHyiGeneration_Toggled(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var toggle = sender as ToggleSwitch;
+                if (toggle != null && _serialPortService != null)
+                {
+                    _serialPortService.IsAutoHyiGenerationEnabled = toggle.IsOn;
+                    
+                    string statusMessage = toggle.IsOn 
+                        ? "✅ Arduino verilerinden otomatik HYI üretimi AKTİF!" 
+                        : "❌ Arduino verilerinden otomatik HYI üretimi KAPALI!";
+                        
+                    System.Diagnostics.Debug.WriteLine($"Auto HYI Generation: {toggle.IsOn}");
+                    System.Diagnostics.Debug.WriteLine(statusMessage);
+                    
+                    // Bilgilendirme mesajı göster
+                    if (toggle.IsOn)
+                    {
+                        // Output port kontrol et
+                        if (!_serialPortService.IsOutputPortOpen())
+                        {
+                            System.Diagnostics.Debug.WriteLine("⚠️ UYARI: Output port açık değil! HYI paketleri gönderilemez.");
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine("✅ Output port açık, Arduino verilerinden HYI paketleri gönderilecek.");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Auto HYI Generation toggle hatası: {ex.Message}");
+            }
+        }
+
+        // Manuel test paketi gönderme butonları için event handler'lar
+        private async void SendManualHyiTest_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                bool success = await _serialPortService.SendManualHyiTestPacket();
+                if (success)
+                {
+                    System.Diagnostics.Debug.WriteLine("Manuel HYI test paketi başarıyla gönderildi");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Manuel HYI test paketi gönderme hatası: {ex.Message}");
+            }
+        }
+
+        private async void SendTestRocket_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                bool success = await _serialPortService.SendTestRocketPacket();
+                if (success)
+                {
+                    System.Diagnostics.Debug.WriteLine("Test roket paketi başarıyla gönderildi");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Test roket paketi gönderme hatası: {ex.Message}");
+            }
+        }
+
+        private async void SendTestPayload_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                bool success = await _serialPortService.SendTestPayloadPacket();
+                if (success)
+                {
+                    System.Diagnostics.Debug.WriteLine("Test payload paketi başarıyla gönderildi");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Test payload paketi gönderme hatası: {ex.Message}");
+            }
+        }
+
+        // Özel HYI paket gönderme metodları
+        private async void SendCustomHyiPacket_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Örnek verilerle özel HYI paketi gönder (verdiğiniz sıraya göre)
+                bool success = await _serialPortService.SendCustomHyiPacket(
+                    teamId: 123,           // Takım ID
+                    packetCounter: 1,      // Sayaç
+                    altitude: 150.5f,      // İrtifa
+                    rocketGpsAltitude: 152.3f,  // Roket GPS İrtifa
+                    rocketLatitude: 39.925533f, // Roket Enlem
+                    rocketLongitude: 32.866287f, // Roket Boylam
+                    payloadGpsAltitude: 148.7f,  // Görev Yükü GPS İrtifa
+                    payloadLatitude: 39.925000f, // Görev Yükü Enlem
+                    payloadLongitude: 32.866000f, // Görev Yükü Boylam
+                    stageGpsAltitude: 145.2f,    // Kademe GPS İrtifa
+                    stageLatitude: 39.924500f,   // Kademe Enlem
+                    stageLongitude: 32.865500f,  // Kademe Boylam
+                    gyroscopeX: 15.3f,      // Jiroskop X
+                    gyroscopeY: -8.7f,      // Jiroskop Y
+                    gyroscopeZ: 22.1f,      // Jiroskop Z
+                    accelerationX: 2.1f,    // İvme X
+                    accelerationY: -1.5f,   // İvme Y
+                    accelerationZ: 9.81f,   // İvme Z
+                    angle: 87.5f,          // Açı
+                    status: 3              // Durum
+                );
+                
+                if (success)
+                {
+                    System.Diagnostics.Debug.WriteLine("Özel HYI paketi başarıyla gönderildi");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Özel HYI paketi gönderme hatası: {ex.Message}");
+            }
+        }
+
+        private async void SendZeroHyiPacket_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Tüm değerleri sıfır olan test paketi gönder
+                bool success = await _serialPortService.SendZeroValueHyiPacket();
+                if (success)
+                {
+                    System.Diagnostics.Debug.WriteLine("Sıfır değerli HYI test paketi başarıyla gönderildi");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Sıfır değerli HYI test paketi gönderme hatası: {ex.Message}");
+            }
+        }
+
+        // Debug test paketleri için yeni event handler'lar
+        private async void SendDebugHyiPacket_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Debug amaçlı özel değerlerle test paketi
+                bool success = await _serialPortService.SendCustomHyiPacket(
+                    teamId: 99,            // Debug takım ID
+                    packetCounter: 255,    // Max sayaç değeri
+                    altitude: 1234.56f,    // Test irtifa
+                    rocketGpsAltitude: 1234.78f,
+                    rocketLatitude: 40.123456f,
+                    rocketLongitude: 29.123456f,
+                    payloadGpsAltitude: 1200.12f,
+                    payloadLatitude: 40.120000f,
+                    payloadLongitude: 29.120000f,
+                    stageGpsAltitude: 1100.99f,
+                    stageLatitude: 40.110000f,
+                    stageLongitude: 29.110000f,
+                    gyroscopeX: 123.45f,
+                    gyroscopeY: -67.89f,
+                    gyroscopeZ: 180.0f,
+                    accelerationX: 9.81f,
+                    accelerationY: -4.52f,
+                    accelerationZ: 15.67f,
+                    angle: 359.99f,
+                    status: 255           // Max durum değeri
+                );
+                
+                if (success)
+                {
+                    System.Diagnostics.Debug.WriteLine("Debug HYI paketi başarıyla gönderildi");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Debug HYI paketi gönderme hatası: {ex.Message}");
             }
         }
 
@@ -391,7 +577,6 @@ namespace copilot_deneme
             _serialPortService.OnPayloadDataUpdated -= OnPayloadDataUpdated;
             _serialPortService.OnTelemetryDataUpdated -= OnTelemetryDataUpdated;
             _serialPortService.OnError -= OnSerialPortError;
-            _outputPortService.OnError -= OnOutputPortError;
             
             System.Diagnostics.Debug.WriteLine("SettingPage'den ayrıldı - Event handler'lar kaldırıldı");
         }
@@ -401,7 +586,6 @@ namespace copilot_deneme
             try
             {
                 await _serialPortService.DisposeAsync();
-                await _outputPortService.DisposeAsync();
                 
                 // Arduino bağlantısını da kapat
                 if (_arduinoSerialPort?.IsOpen == true)

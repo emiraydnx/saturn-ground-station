@@ -335,9 +335,27 @@
                         </StackPanel>
                         
                         <StackPanel Spacing="16">
-                            <TextBlock Text="HYI verilerini test etmek için random değerlerle simülasyon yapabilirsiniz." 
+                            <TextBlock Text="HYI verilerini test etmek için random değerlerle simülasyon yapabilirsiniz ve Arduino verilerinden otomatik HYI paketi üretebilirsiniz." 
                                        Style="{StaticResource SettingLabelStyle}"
                                        TextWrapping="Wrap"/>
+                            
+                            <!-- ✨ YENİ: Arduino'dan Otomatik HYI Üretimi Toggle -->
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="🚀 Arduino Verilerinden Otomatik HYI Üretimi:" 
+                                           Style="{StaticResource SettingLabelStyle}"/>
+                                <ToggleSwitch x:Name="AutoHyiGenerationToggle" 
+                                              Header="Arduino verilerinden HYI paketi oluştur" 
+                                              OnContent="Aktif" 
+                                              OffContent="Kapalı"
+                                              IsOn="False"
+                                              Toggled="AutoHyiGeneration_Toggled"
+                                              Foreground="White"/>
+                                <TextBlock Text="⚠️ Bu özellik Arduino'dan roket telemetri verisi geldiğinde otomatik olarak HYI paketi oluşturup gönderir." 
+                                           Style="{StaticResource SettingLabelStyle}"
+                                           FontSize="12"
+                                           Foreground="#FFD93D"
+                                           TextWrapping="Wrap"/>
+                            </StackPanel>
                             
                             <Grid>
                                 <Grid.ColumnDefinitions>
@@ -371,7 +389,7 @@
                             </Grid>
                             
                             <!-- Control Buttons -->
-                            <StackPanel Orientation="Horizontal" Spacing="16" HorizontalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Center">
                                 <Button x:Name="StartHyiTestButton" 
                                         Content="🚀 Test Başlat" 
                                         Click="StartHyiTest_Click"
@@ -383,6 +401,43 @@
                                         Style="{StaticResource SettingButtonStyle}"
                                         Background="{StaticResource DangerBrush}"
                                         IsEnabled="False"/>
+                            </StackPanel>
+                            
+                            <!-- Manual Test Buttons -->
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Manuel Test Paketleri:" 
+                                           Style="{StaticResource SettingLabelStyle}"/>
+                                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+                                    <Button Content="📤 Özel HYI" 
+                                            Click="SendCustomHyiPacket_Click"
+                                            Background="#FF6B6B" 
+                                            Foreground="White"
+                                            Width="140" Height="35"/>
+                                    <Button Content="📦 Sıfır HYI" 
+                                            Click="SendZeroHyiPacket_Click"
+                                            Background="#FFE66D" 
+                                            Foreground="Black"
+                                            Width="140" Height="35"/>
+                                    <Button Content="🚀 Test Roket" 
+                                            Click="SendTestRocket_Click"
+                                            Background="#06FFA5" 
+                                            Foreground="Black"
+                                            Width="140" Height="35"/>
+                                    <Button Content="📡 Test Payload" 
+                                            Click="SendTestPayload_Click"
+                                            Background="#4ECDC4" 
+                                            Foreground="Black"
+                                            Width="140" Height="35"/>
+                                </StackPanel>
+                                
+                                <!-- Debug Test Buttons -->
+                                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,8,0,0">
+                                    <Button Content="🔬 Debug HYI" 
+                                            Click="SendDebugHyiPacket_Click"
+                                            Background="#9B59B6" 
+                                            Foreground="White"
+                                            Width="140" Height="35"/>
+                                </StackPanel>
                             </StackPanel>
                         </StackPanel>
                     </StackPanel>

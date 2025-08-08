@@ -10,6 +10,7 @@ namespace copilot_deneme
         #region Properties
         ChartViewModel? ViewModel { get; set; }
         DispatcherQueue? Dispatcher { get; set; }
+        bool IsHyiTestMode { get; set; }
         #endregion
 
         #region Events
@@ -38,6 +39,43 @@ namespace copilot_deneme
             float rocketTemp, float payloadTemp, float rocketPressure, float payloadPressure,
             float payloadHumidity, string source = "External",
             float rocketAccelX = 0, float rocketAccelY = 0);
+        #endregion
+
+        #region Output Port Methods
+        Task InitializeOutputPortAsync(string portName, int baudRate);
+        Task WriteToOutputPortAsync(byte[] data);
+        bool IsOutputPortOpen();
+        Task CloseOutputPortAsync();
+        #endregion
+
+        #region HYI Test Methods
+        void StartHyiTestMode(int intervalMs = 2000);
+        void StopHyiTestMode();
+        Task<bool> SendManualHyiTestPacket();
+        Task<bool> SendTestRocketPacket();
+        Task<bool> SendTestPayloadPacket();
+        Task<bool> SendCustomHyiPacket(
+            byte teamId,
+            byte packetCounter,
+            float altitude,
+            float rocketGpsAltitude,
+            float rocketLatitude,
+            float rocketLongitude,
+            float payloadGpsAltitude,
+            float payloadLatitude,
+            float payloadLongitude,
+            float stageGpsAltitude,
+            float stageLatitude,
+            float stageLongitude,
+            float gyroscopeX,
+            float gyroscopeY,
+            float gyroscopeZ,
+            float accelerationX,
+            float accelerationY,
+            float accelerationZ,
+            float angle,
+            byte status);
+        Task<bool> SendZeroValueHyiPacket();
         #endregion
     }
 }
