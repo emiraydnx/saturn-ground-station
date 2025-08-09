@@ -26,10 +26,10 @@ namespace copilot_deneme
 
         // GPS Harita değişkenleri
         private bool _isMapInitialized = false;
-        private double _currentRocketLat = 39.925533;  // Ankara başlangıç konumu
-        private double _currentRocketLon = 32.866287;
-        private double _currentPayloadLat = 39.925533;
-        private double _currentPayloadLon = 32.866287;
+        private double _currentRocketLat = 38.535533;  // Ankara başlangıç konumu
+        private double _currentRocketLon = 27.01620;
+        private double _currentPayloadLat = 38.535675;
+        private double _currentPayloadLon = 27.02199;
 
         public sitPage()
         {
@@ -219,6 +219,22 @@ namespace copilot_deneme
 <body>
     <div id='map'></div>
 
+    <!-- ✅ EKSİK KOORDİNAT PANELLERİ EKLENDİ -->
+    <div class='info-panel'>
+        <div class='info-title'>🚀 Roket Konumu</div>
+        <div class='coord-row'><span>Enlem:</span> <span id='rocket-coords'>--</span></div>
+        <div class='coord-row'><span>İrtifa:</span> <span id='rocket-alt'>-- m</span></div>
+        
+        <div class='info-title' style='margin-top: 12px;'>🟢 Payload Konumu</div>
+        <div class='coord-row'><span>Enlem:</span> <span id='payload-coords'>--</span></div>
+        <div class='coord-row'><span>İrtifa:</span> <span id='payload-alt'>-- m</span></div>
+        
+        <div class='coord-row' style='margin-top: 8px; border-top: 1px solid #444; padding-top: 8px;'>
+            <span><strong>Mesafe:</strong></span> <span id='distance'>-- m</span>
+        </div>
+        <div class='coord-row'><span>Son Güncelleme:</span> <span id='last-update'>--:--:--</span></div>
+    </div>
+
     <div class='legend-panel'>
         <div style='font-weight: bold; margin-bottom: 4px;'>Açıklama</div>
         <div>🔴 Roket Konumu</div>
@@ -288,9 +304,10 @@ namespace copilot_deneme
             return R * c;
         }}
         
-        // C# tarafından çağrılacak JavaScript fonksiyonları
+        // ✅ C# tarafından çağrılacak JavaScript fonksiyonları - GEÇERLİ KOORDİNAT KONTROLÜ İLE
         window.updateRocketPosition = function(lat, lon, alt) {{
-            if (lat !== 0 && lon !== 0) {{
+            console.log('🚀 Roket pozisyon güncellemesi:', lat, lon, alt);
+            if (lat !== 0 && lon !== 0 && !isNaN(lat) && !isNaN(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {{
                 var newPos = [lat, lon];
                 rocketMarker.setLatLng(newPos);
                 rocketPath.addLatLng(newPos);
@@ -301,11 +318,15 @@ namespace copilot_deneme
                 updateLastUpdateTime();
                 updateDistance();
                 fitMapToBounds();
+                console.log('✅ Roket marker güncellendi:', lat.toFixed(6), lon.toFixed(6));
+            }} else {{
+                console.log('❌ Geçersiz roket koordinatları:', lat, lon);
             }}
         }};
         
         window.updatePayloadPosition = function(lat, lon, alt) {{
-            if (lat !== 0 && lon !== 0) {{
+            console.log('🟢 Payload pozisyon güncellemesi:', lat, lon, alt);
+            if (lat !== 0 && lon !== 0 && !isNaN(lat) && !isNaN(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {{
                 var newPos = [lat, lon];
                 payloadMarker.setLatLng(newPos);
                 payloadPath.addLatLng(newPos);
@@ -316,28 +337,38 @@ namespace copilot_deneme
                 updateLastUpdateTime();
                 updateDistance();
                 fitMapToBounds();
+                console.log('✅ Payload marker güncellendi:', lat.toFixed(6), lon.toFixed(6));
+            }} else {{
+                console.log('❌ Geçersiz payload koordinatları:', lat, lon);
             }}
         }};
         
         window.updateBothPositions = function(rocketLat, rocketLon, rocketAlt, payloadLat, payloadLon, payloadAlt) {{
+            console.log('🔄 Her iki pozisyon güncellemesi:', rocketLat, rocketLon, payloadLat, payloadLon);
             var updated = false;
             
-            if (rocketLat !== 0 && rocketLon !== 0) {{
+            if (rocketLat !== 0 && rocketLon !== 0 && !isNaN(rocketLat) && !isNaN(rocketLon) && Math.abs(rocketLat) <= 90 && Math.abs(rocketLon) <= 180) {{
                 var rocketPos = [rocketLat, rocketLon];
                 rocketMarker.setLatLng(rocketPos);
                 rocketPath.addLatLng(rocketPos);
                 document.getElementById('rocket-coords').textContent = rocketLat.toFixed(6) + ', ' + rocketLon.toFixed(6);
                 document.getElementById('rocket-alt').textContent = rocketAlt.toFixed(2) + ' m';
                 updated = true;
+                console.log('✅ Roket güncellendi:', rocketLat.toFixed(6), rocketLon.toFixed(6));
+            }} else {{
+                console.log('❌ Geçersiz roket koordinatları - geçiliyor');
             }}
             
-            if (payloadLat !== 0 && payloadLon !== 0) {{
+            if (payloadLat !== 0 && payloadLon !== 0 && !isNaN(payloadLat) && !isNaN(payloadLon) && Math.abs(payloadLat) <= 90 && Math.abs(payloadLon) <= 180) {{
                 var payloadPos = [payloadLat, payloadLon];
                 payloadMarker.setLatLng(payloadPos);
                 payloadPath.addLatLng(payloadPos);
                 document.getElementById('payload-coords').textContent = payloadLat.toFixed(6) + ', ' + payloadLon.toFixed(6);
                 document.getElementById('payload-alt').textContent = payloadAlt.toFixed(2) + ' m';
                 updated = true;
+                console.log('✅ Payload güncellendi:', payloadLat.toFixed(6), payloadLon.toFixed(6));
+            }} else {{
+                console.log('❌ Geçersiz payload koordinatları - geçiliyor');
             }}
             
             if (updated) {{
@@ -373,6 +404,9 @@ namespace copilot_deneme
         // İlk güncelleme
         updateLastUpdateTime();
         updateDistance();
+        
+        // ✅ DEBUG İÇİN CONSOLE LOGLAMASINI AKTİF ET
+        console.log('🌍 GPS Harita sistemi başlatıldı - Koordinat güncellemeleri bekleniyor...');
     </script>
 </body>
 </html>";
@@ -384,33 +418,61 @@ namespace copilot_deneme
             
             try
             {
+                // ✅ GEÇERLİ KOORDİNAT KONTROLÜ EKLE
+                bool rocketValid = rocketLat != 0 && rocketLon != 0 && 
+                                  !double.IsNaN(rocketLat) && !double.IsNaN(rocketLon) &&
+                                  Math.Abs(rocketLat) <= 90 && Math.Abs(rocketLon) <= 180;
+                                  
+                bool payloadValid = payloadLat != 0 && payloadLon != 0 && 
+                                   !double.IsNaN(payloadLat) && !double.IsNaN(payloadLon) &&
+                                   Math.Abs(payloadLat) <= 90 && Math.Abs(payloadLon) <= 180;
+                
                 // Sadece geçerli koordinatları güncelle
-                if (rocketLat != 0 && rocketLon != 0)
+                if (rocketValid)
                 {
                     _currentRocketLat = rocketLat;
                     _currentRocketLon = rocketLon;
+                    System.Diagnostics.Debug.WriteLine($"📍 GEÇERLİ Roket koordinatı: {rocketLat:F6}, {rocketLon:F6}");
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"❌ GEÇERSİZ Roket koordinatı: {rocketLat:F6}, {rocketLon:F6}");
                 }
                 
-                if (payloadLat != 0 && payloadLon != 0)
+                if (payloadValid)
                 {
                     _currentPayloadLat = payloadLat;
                     _currentPayloadLon = payloadLon;
+                    System.Diagnostics.Debug.WriteLine($"📍 GEÇERLİ Payload koordinatı: {payloadLat:F6}, {payloadLon:F6}");
                 }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"❌ GEÇERSİZ Payload koordinatı: {payloadLat:F6}, {payloadLon:F6}");
+                }
+                
+                // ✅ DETAYLI DEBUG BİLGİSİ
+                System.Diagnostics.Debug.WriteLine($"🔍 GPS Güncelleme çağrısı:");
+                System.Diagnostics.Debug.WriteLine($"   - Roket: ({rocketLat:F6}, {rocketLon:F6}) - Geçerli: {rocketValid}");
+                System.Diagnostics.Debug.WriteLine($"   - Payload: ({payloadLat:F6}, {payloadLon:F6}) - Geçerli: {payloadValid}");
                 
                 // JavaScript fonksiyonunu çağır - irtifa bilgisi ile birlikte
                 string script = $"updateBothPositions({_currentRocketLat.ToString(CultureInfo.InvariantCulture)}, " +
-                               $"{_currentRocketLon.ToString(CultureInfo.InvariantCulture)}, " +
-                               $"{rocketAlt.ToString(CultureInfo.InvariantCulture)}, " +
-                               $"{_currentPayloadLat.ToString(CultureInfo.InvariantCulture)}, " +
-                               $"{_currentPayloadLon.ToString(CultureInfo.InvariantCulture)}, " +
-                               $"{payloadAlt.ToString(CultureInfo.InvariantCulture)})";
+                                   $"{_currentRocketLon.ToString(CultureInfo.InvariantCulture)}, " +
+                                   $"{rocketAlt.ToString(CultureInfo.InvariantCulture)}, " +
+                                   $"{_currentPayloadLat.ToString(CultureInfo.InvariantCulture)}, " +
+                                   $"{_currentPayloadLon.ToString(CultureInfo.InvariantCulture)}, " +
+                                   $"{payloadAlt.ToString(CultureInfo.InvariantCulture)})";
                 
+                // ✅ SCRIPT'İ ÇALIŞTIR VE LOG'LA
+                System.Diagnostics.Debug.WriteLine($"🌍 JavaScript çağrılıyor: {script}");
                 await MapWebView.ExecuteScriptAsync(script);
-                System.Diagnostics.Debug.WriteLine($"sitPage GPS pozisyonları güncellendi - Roket: {_currentRocketLat:F6}, {_currentRocketLon:F6} ({rocketAlt:F1}m) | Payload: {_currentPayloadLat:F6}, {_currentPayloadLon:F6} ({payloadAlt:F1}m)");
+                
+                System.Diagnostics.Debug.WriteLine($"✅ sitPage GPS pozisyonları güncellendi - Roket: {_currentRocketLat:F6}, {_currentRocketLon:F6} ({rocketAlt:F1}m) | Payload: {_currentPayloadLat:F6}, {_currentPayloadLon:F6} ({payloadAlt:F1}m)");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"sitPage GPS pozisyon güncelleme hatası: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"❌ sitPage GPS pozisyon güncelleme hatası: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"   - Stack Trace: {ex.StackTrace}");
             }
         }
 
@@ -528,6 +590,23 @@ namespace copilot_deneme
             {
                 try
                 {
+                    // ✅ DEBUG: Gelen veriyi analiz et
+                    System.Diagnostics.Debug.WriteLine($"🔍 OnTelemetryDataUpdated çağrıldı:");
+                    System.Diagnostics.Debug.WriteLine($"   - RocketData null mu: {rocketData == null}");
+                    System.Diagnostics.Debug.WriteLine($"   - PayloadData null mu: {payloadData == null}");
+                    
+                    if (rocketData != null)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"   - Roket Koordinatları: {rocketData.RocketLatitude:F6}, {rocketData.RocketLongitude:F6}");
+                        System.Diagnostics.Debug.WriteLine($"   - Roket İrtifa: {rocketData.RocketAltitude:F2}m");
+                    }
+                    
+                    if (payloadData != null)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"   - Payload Koordinatları: {payloadData.PayloadLatitude:F6}, {payloadData.PayloadLongitude:F6}");
+                        System.Diagnostics.Debug.WriteLine($"   - Payload İrtifa: {payloadData.PayloadAltitude:F2}m");
+                    }
+
                     // Roket verileri - null kontrolü ile
                     if (rocketData != null)
                     {
@@ -549,6 +628,9 @@ namespace copilot_deneme
                         AccelYText.Text = $"{rocketData.AccelY:F2} m/s²";
                         AccelZText.Text = $"{rocketData.AccelZ:F2} m/s²";
                         AngleText.Text = $"{rocketData.Angle:F2}°";
+                        
+                        // ✅ KOORDİNAT DURUMU LOGLA
+                        System.Diagnostics.Debug.WriteLine($"🌍 UI Roket koordinatları güncellendi: {rocketData.RocketLatitude:F6}, {rocketData.RocketLongitude:F6}");
                     }
                     
                     // Payload verileri
@@ -562,18 +644,29 @@ namespace copilot_deneme
                         PayloadTemperatureText.Text = $"{payloadData.PayloadTemperature:F1} °C";
                         PayloadPressureText.Text = $"{payloadData.PayloadPressure:F1} hPa";
                         PayloadHumidityText.Text = $"{payloadData.PayloadHumidity:F1} %";
+                        
+                        // ✅ KOORDİNAT DURUMU LOGLA
+                        System.Diagnostics.Debug.WriteLine($"🌍 UI Payload koordinatları güncellendi: {payloadData.PayloadLatitude:F6}, {payloadData.PayloadLongitude:F6}");
                     }
 
-                    // GPS haritasını güncelle - gerçek koordinatlar ve irtifa bilgisi ile
-                    if (rocketData != null && payloadData != null)
+                    // ✅ GPS haritasını güncelle - HER DURUMDA ÇAĞIR!
+                    double rLat = rocketData?.RocketLatitude ?? 0;
+                    double rLon = rocketData?.RocketLongitude ?? 0; 
+                    double rAlt = rocketData?.RocketAltitude ?? 0;
+                    double pLat = payloadData?.PayloadLatitude ?? 0;
+                    double pLon = payloadData?.PayloadLongitude ?? 0;
+                    double pAlt = payloadData?.PayloadAltitude ?? 0;
+                    
+                    System.Diagnostics.Debug.WriteLine($"🗺️ GPS harita güncellemesi çağrılıyor...");
+                    System.Diagnostics.Debug.WriteLine($"   - Roket: ({rLat:F6}, {rLon:F6}) Alt: {rAlt:F1}m");
+                    System.Diagnostics.Debug.WriteLine($"   - Payload: ({pLat:F6}, {pLon:F6}) Alt: {pAlt:F1}m");
+                    
+                    UpdateSitPageGpsPositions(rLat, rLon, rAlt, pLat, pLon, pAlt);
+
+                    // Chart'lara veri gönder - sadece veri varsa
+                    if (rocketData != null || payloadData != null)
                     {
-                        UpdateSitPageGpsPositions(rocketData.RocketLatitude, rocketData.RocketLongitude, rocketData.RocketAltitude,
-                                                payloadData.PayloadLatitude, payloadData.PayloadLongitude, payloadData.PayloadAltitude);
-
-                        // Chart'lara veri gönder
                         SendDataToCharts(rocketData, payloadData);
-
-                        // İstatistikleri güncelle
                         UpdateStatistics(rocketData, payloadData);
                     }
 
@@ -583,11 +676,12 @@ namespace copilot_deneme
                     _Counter = (_Counter + 1) % 256;
                     DataCountText.Text = _Counter.ToString();
 
-                    System.Diagnostics.Debug.WriteLine($"sitPage telemetri ve GPS güncellendi - Roket İrtifa: {rocketData?.RocketAltitude:F1}m, Payload İrtifa: {payloadData?.PayloadAltitude:F1}m");
+                    System.Diagnostics.Debug.WriteLine($"✅ sitPage telemetri ve GPS güncellendi - Roket İrtifa: {rocketData?.RocketAltitude:F1}m, Payload İrtifa: {payloadData?.PayloadAltitude:F1}m");
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"sitPage telemetri güncelleme hatası: {ex.Message}");
+                    System.Diagnostics.Debug.WriteLine($"❌ sitPage telemetri güncelleme hatası: {ex.Message}");
+                    System.Diagnostics.Debug.WriteLine($"   - Stack Trace: {ex.StackTrace}");
                     LastUpdateText.Text = $"Hata: {DateTime.Now:HH:mm:ss}";
                 }
             });
@@ -691,6 +785,9 @@ namespace copilot_deneme
                     _serialPortService.OnDataReceived += OnSerialDataReceived;
                     _serialPortService.OnRotationDataReceived += OnRotationDataReceived;
                     
+                    // ✨ YENİ: Sadece roket verilerini debug için dinle
+                    _serialPortService.OnRocketDataUpdated += OnRocketDataReceivedDebug;
+                    
                     // ViewModel'i al
                     _viewModel = _serialPortService.ViewModel ?? new ChartViewModel();
                     
@@ -707,14 +804,34 @@ namespace copilot_deneme
             }
         }
 
-        protected override void OnNavigatedTo(NavigationEventArgs e)
+        /// <summary>
+        /// 🚀 SADECE ROKET VERİLERİNİ DEBUG KISMINDA YAZDIRAN METOD
+        /// Roket telemetri verilerini aynı sıra ile debug output'a yazdırır
+        /// </summary>
+        private void OnRocketDataReceivedDebug(SerialPortService.RocketTelemetryData rocketData)
         {
-            base.OnNavigatedTo(e);
-            
-            // SerialPortService'e bağlan
-            ConnectToSerialPortService();
-            
-            System.Diagnostics.Debug.WriteLine("sitPage navigasyon tamamlandı - GPS harita sistemi hazır");
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("🚀 =============== ROKET TELEMETRİ VERİSİ ===============");
+                System.Diagnostics.Debug.WriteLine($"📦 PAKET SAYACI: {rocketData.PacketCounter}");
+
+                // Gerçek veri kontrolü
+                if (rocketData.PacketCounter > 0)
+                {
+                    System.Diagnostics.Debug.WriteLine($"   - Gerçek Roket İrtifası: {rocketData.RocketAltitude:F1} m");
+                    System.Diagnostics.Debug.WriteLine($"   - Gerçek Roket Koordinatları: {rocketData.RocketLatitude:F6}, {rocketData.RocketLongitude:F6}");
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"   - Dummy Roket Verisi (güncellenmedi)");
+                }
+                
+                System.Diagnostics.Debug.WriteLine("🚀 ==================================================");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"🚀 Hata ayıklama hatası: {ex.Message}");
+            }
         }
 
         protected override void OnNavigatedFrom(NavigationEventArgs e)
@@ -727,6 +844,9 @@ namespace copilot_deneme
                 _serialPortService.OnTelemetryDataUpdated -= OnTelemetryDataUpdated;
                 _serialPortService.OnDataReceived -= OnSerialDataReceived;
                 _serialPortService.OnRotationDataReceived -= OnRotationDataReceived;
+                
+                // ✨ YENİ: Roket debug event handler'ını da kaldır
+                _serialPortService.OnRocketDataUpdated -= OnRocketDataReceivedDebug;
             }
             
             System.Diagnostics.Debug.WriteLine("sitPage'den ayrıldı - Event handler'lar kaldırıldı");

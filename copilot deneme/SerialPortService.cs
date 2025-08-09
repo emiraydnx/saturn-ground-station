@@ -59,6 +59,11 @@ namespace copilot_deneme
         public SerialPortService(ILogger<SerialPortService>? logger = null)
         {
             _logger = logger;
+            
+            // ✅ BAŞLANGIÇ DURUMU DEBUG BİLGİSİ
+            Debug.WriteLine($"🔧 SerialPortService oluşturuldu:");
+            Debug.WriteLine($"   - IsHyiTestMode: {IsHyiTestMode}");
+            Debug.WriteLine($"   - IsAutoHyiGenerationEnabled: {IsAutoHyiGenerationEnabled}");
         }
 
         #region Properties
@@ -201,6 +206,13 @@ namespace copilot_deneme
             _hyiTestTimer = new Timer(GenerateRandomHyiData, null, 1000, intervalMs);
             OnDataReceived?.Invoke($"🧪 HYI TEST MODU BAŞLATILDI! {intervalMs}ms aralıklarla random veri + Arduino verilerinden otomatik HYI üretimi aktif!");
             
+            // ✅ DEBUG BİLGİSİ EKLE
+            Debug.WriteLine($"🚀🔧 HYI Test Modu başlatıldı:");
+            Debug.WriteLine($"   - IsHyiTestMode: {IsHyiTestMode}");
+            Debug.WriteLine($"   - IsAutoHyiGenerationEnabled: {IsAutoHyiGenerationEnabled}");
+            Debug.WriteLine($"   - Interval: {intervalMs}ms");
+            Debug.WriteLine($"   - Output Port Open: {IsOutputPortOpen()}");
+            
             _logger?.LogInformation("HYI Test Modu başlatıldı - Interval: {IntervalMs}ms, Auto Generation: true", intervalMs);
         }
 
@@ -307,9 +319,17 @@ namespace copilot_deneme
         /// </summary>
         private async void GenerateAndSendHyiFromRocketData(RocketTelemetryData rocketData)
         {
-            if (!IsAutoHyiGenerationEnabled || !IsOutputPortOpen())
+            // ✅ DETAYLI DEBUG BİLGİSİ
+            Debug.WriteLine($"🚀➡️📡 GenerateAndSendHyiFromRocketData çağrıldı!");
+            Debug.WriteLine($"   - IsAutoHyiGenerationEnabled: {IsAutoHyiGenerationEnabled}");
+            Debug.WriteLine($"   - IsOutputPortOpen(): {IsOutputPortOpen()}");
+            Debug.WriteLine($"   - Roket verisi: İrtifa={rocketData.RocketAltitude:F2}m, TeamID={rocketData.TeamID}, Counter={rocketData.PacketCounter}");
+            
+            if (!IsAutoHyiGenerationEnabled)
             {
-                return; // HYI üretimi aktif değil veya output port kapalı
+                Debug.WriteLine("❌ HYI üretimi aktif değil - çıkılıyor");
+                OnDataReceived?.Invoke("⚠️ Arduino verilerinden HYI üretimi aktif değil! HYI test modunu başlatın.");
+                return; // HYI üretimi aktif değil
             }
 
             try
@@ -356,29 +376,41 @@ namespace copilot_deneme
                     CRC = 0 // CRC otomatik hesaplanacak
                 };
 
+                Debug.WriteLine($"🔧 HYI paketi oluşturuldu: #{hyiData.PacketCounter}, İrtifa: {hyiData.Altitude:F2}m");
+
                 // HYI verisini binary paket haline getir
                 byte[] hyiPacket = ConvertHyiDataToPacket(hyiData);
                 
-                // Output port'a gönder
-                await WriteToOutputPortAsync(hyiPacket);
+                // Output port'a gönder (eğer açıksa)
+                if (IsOutputPortOpen())
+                {
+                    await WriteToOutputPortAsync(hyiPacket);
+                    OnDataReceived?.Invoke($"🚀➡️📡 ARDUINO VERİSİNDEN HYI PAKETİ GÖNDERİLDİ! #{hyiData.PacketCounter} - İrtifa: {hyiData.Altitude:F1}m, {hyiPacket.Length} byte");
+                    Debug.WriteLine($"✅ HYI paketi output port'a gönderildi: {hyiPacket.Length} byte");
+                }
+                else
+                {
+                    // Output port kapalı olsa bile HYI event'ini tetikle
+                    OnDataReceived?.Invoke($"🚀➡️📡 ARDUINO VERİSİNDEN HYI ÜRETİLDİ (Output port kapalı)! #{hyiData.PacketCounter} - İrtifa: {hyiData.Altitude:F1}m");
+                    Debug.WriteLine($"⚠️ Output port kapalı, sadece HYI verisi oluşturuldu");
+                }
                 
-                // Event'i tetikle (UI için)
+                // Event'i tetikle (UI için) - OUTPUT PORT DURUMUNDAN BAĞIMSIZ!
                 Dispatcher?.TryEnqueue(() => OnHYIPacketReceived?.Invoke(hyiData));
                 
-                OnDataReceived?.Invoke($"🚀➡️📡 ARDUINO VERİSİNDEN HYI PAKETİ GÖNDERİLDİ! #{hyiData.PacketCounter} - İrtifa: {hyiData.Altitude:F1}m, {hyiPacket.Length} byte");
-                
-                _logger?.LogInformation("Arduino verilerinden HYI paketi oluşturuldu ve gönderildi: #{PacketCounter}, Altitude: {Altitude:F2}m", 
-                    hyiData.PacketCounter, hyiData.Altitude);
+                _logger?.LogInformation("Arduino verilerinden HYI paketi oluşturuldu: #{PacketCounter}, Altitude: {Altitude:F2}m, OutputPortOpen: {OutputPortOpen}", 
+                    hyiData.PacketCounter, hyiData.Altitude, IsOutputPortOpen());
             }
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Arduino verilerinden HYI paketi oluşturma hatası");
                 OnError?.Invoke($"Arduino->HYI dönüştürme hatası: {ex.Message}");
+                Debug.WriteLine($"❌ GenerateAndSendHyiFromRocketData hatası: {ex.Message}");
             }
         }
 
         /// <summary>
-        /// Manuel HYI test paketi oluştur ve gönder
+        /// HYI modülüne manuel HYI paketi gönder
         /// </summary>
         public async Task<bool> SendManualHyiTestPacket()
         {
@@ -481,7 +513,7 @@ namespace copilot_deneme
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Test roket paketi gönderme hatası");
-                OnError?.Invoke($"Test roket hatası: {ex.Message}");
+                OnError?.Invoke($"Test payload hatası: {ex.Message}");
                 return false;
             }
         }
@@ -1192,10 +1224,19 @@ namespace copilot_deneme
                     // ✨ YENİ: Roket telemetrilerinden HYIDenem verisi oluştur ve chart'ları güncelle
                     GenerateHYIDenemeFromRocketAndUpdateCharts(data);
                     
+                    // ✅ DEBUG: Arduino verilerinden HYI paketi oluşturma işlemini kontrol et
+                    Debug.WriteLine($"🔍 ProcessRocketTelemetryPackets: IsAutoHyiGenerationEnabled = {IsAutoHyiGenerationEnabled}");
+                    
                     // ✨ YENİ: HYI test sistemi aktifse Arduino verilerinden HYI paketi oluştur ve gönder
                     if (IsAutoHyiGenerationEnabled)
                     {
+                        Debug.WriteLine($"🚀➡️📡 Arduino verilerinden HYI paketi oluşturma işlemi başlatılıyor...");
                         Task.Run(async () => GenerateAndSendHyiFromRocketData(data));
+                    }
+                    else
+                    {
+                        Debug.WriteLine($"❌ IsAutoHyiGenerationEnabled = false, HYI paketi oluşturulmayacak");
+                        OnDataReceived?.Invoke("⚠️ Arduino verilerinden HYI üretimi aktif değil! HYI test modunu başlatın.");
                     }
                 }, "Rocket");
         }
@@ -1276,8 +1317,27 @@ namespace copilot_deneme
             {
                 if (!IsValidPacket(packet, ROCKET_HEADER))
                 {
-                    Debug.WriteLine("Roket paketi header validation başarısız!");
+                    Debug.WriteLine("❌ Roket paketi header validation başarısız!");
                     return null;
+                }
+
+                // ✅ TAM DEBUG BİLGİSİ - TÜM PAKETİ ANALIZ ET
+                Debug.WriteLine("🔍 ====== ROKET PAKETİ PARSE EDİLİYOR ======");
+                Debug.WriteLine($"📏 Paket boyutu: {packet.Length} byte");
+                
+                // Header kontrolü
+                string headerHex = BitConverter.ToString(packet, 0, 4).Replace("-", " ");
+                Debug.WriteLine($"🏷️ Header: {headerHex}");
+                
+                // İlk 20 byte hex dump
+                string first20Hex = BitConverter.ToString(packet, 0, Math.Min(20, packet.Length)).Replace("-", " ");
+                Debug.WriteLine($"🔍 İlk 20 byte: {first20Hex}");
+                
+                // Son 10 byte hex dump
+                if (packet.Length >= 10)
+                {
+                    string last10Hex = BitConverter.ToString(packet, packet.Length - 10, 10).Replace("-", " ");
+                    Debug.WriteLine($"🔍 Son 10 byte: {last10Hex}");
                 }
 
                 var data = new RocketTelemetryData
@@ -1298,24 +1358,78 @@ namespace copilot_deneme
                     RocketPressure = BitConverter.ToSingle(packet, 53),
                     RocketSpeed = BitConverter.ToSingle(packet, 57),
                     status = packet[61],
-                    CRC = 0,
-                    TeamID = 255,
+                    CRC = packet[62], // CRC'yi data'ya kaydet
+                    TeamID = 255, // Default team ID
                 };
 
-                // CRC validation
-                byte calculatedCRC = CalculateSimpleCRC(packet, 4, 58); // 4'den 61'e kadar (status dahil)
-                if (calculatedCRC != packet[62])
+                // ✅ DETAYLI PARSE BİLGİSİ
+                Debug.WriteLine($"📊 Sayaç: {data.PacketCounter}");
+                Debug.WriteLine($"📡 İrtifa: {data.RocketAltitude:F2}m (bytes 5-8)");
+                Debug.WriteLine($"📡 GPS İrtifa: {data.RocketGpsAltitude:F2}m (bytes 9-12)");
+                Debug.WriteLine($"🌍 Koordinat: {data.RocketLatitude:F6}, {data.RocketLongitude:F6} (bytes 13-20)");
+                Debug.WriteLine($"🔄 Gyro: X={data.GyroX:F2}, Y={data.GyroY:F2}, Z={data.GyroZ:F2} (bytes 21-32)");
+                Debug.WriteLine($"⚡ Accel: X={data.AccelX:F2}, Y={data.AccelY:F2}, Z={data.AccelZ:F2} (bytes 33-44)");
+                Debug.WriteLine($"📐 Açı: {data.Angle:F2}° (bytes 45-48)");
+                Debug.WriteLine($"🌡️ Sıcaklık: {data.RocketTemperature:F2}°C (bytes 49-52)");
+                Debug.WriteLine($"🌀 Basınç: {data.RocketPressure:F2} hPa (bytes 53-56)");
+                Debug.WriteLine($"🚀 Hız: {data.RocketSpeed:F2} m/s (bytes 57-60)");
+                Debug.WriteLine($"📊 Status: {data.status} (byte 61)");
+
+                // ✅ CRC HESAPLAMA VE DOĞRULAMA
+                byte expectedCRC = packet[62]; // Arduino'dan gelen CRC
+                byte calculatedCRC = CalculateChecksumAddition(packet, 4, 58); // 4'den 61'e kadar (status dahil)
+                
+                Debug.WriteLine($"🔧 CRC Kontrolü:");
+                Debug.WriteLine($"   - Gelen CRC: 0x{expectedCRC:X2} ({expectedCRC})");
+                Debug.WriteLine($"   - Hesaplanan CRC: 0x{calculatedCRC:X2} ({calculatedCRC})");
+                Debug.WriteLine($"   - Hesaplama aralığı: byte 4-61 ({58} byte)");
+                
+                if (calculatedCRC != expectedCRC)
                 {
-                    Debug.WriteLine($"Rocket telemetry CRC hatası! Hesaplanan: 0x{calculatedCRC:X2}, Gelen: 0x{packet[62]:X2}");
+                    Debug.WriteLine($"❌ CRC HATASI! Gelen ≠ Hesaplanan");
+                    
+                    // CRC hesaplama debug - ilk 10 byte
+                    int sum = 0;
+                    Debug.WriteLine($"🔧 CRC Hesaplama Debug (ilk 10 byte):");
+                    for (int i = 4; i < Math.Min(14, packet.Length); i++)
+                    {
+                        sum += packet[i];
+                        Debug.WriteLine($"   byte[{i}] = 0x{packet[i]:X2} ({packet[i]}) -> sum = {sum}");
+                    }
+                    Debug.WriteLine($"   Final sum % 256 = {sum % 256} (0x{(sum % 256):X2})");
+                    
                     // CRC hatası olsa bile veriyi döndür (test amaçlı)
+                    Debug.WriteLine("⚠️ CRC hatası ignore ediliyor, veri parse ediliyor...");
+                }
+                else
+                {
+                    Debug.WriteLine($"✅ CRC DOĞRU!");
                 }
 
-                Debug.WriteLine($"Roket paketi parse edildi: #{data.PacketCounter}, İrtifa: {data.RocketAltitude:F2}m, CRC: 0x{data.CRC:X2}");
+                // ✅ DEĞER DOĞRULAMA KONTROLLERI
+                if (float.IsNaN(data.RocketAltitude) || float.IsInfinity(data.RocketAltitude))
+                {
+                    Debug.WriteLine($"⚠️ İrtifa değeri geçersiz: {data.RocketAltitude}");
+                }
+                
+                if (Math.Abs(data.RocketAltitude) > 50000)
+                {
+                    Debug.WriteLine($"⚠️ İrtifa değeri aşırı büyük: {data.RocketAltitude:F2}m");
+                }
+
+                // ✅ FLOAT BYTE ANALİZİ (İrtifa için)
+                byte[] altitudeBytes = BitConverter.GetBytes(data.RocketAltitude);
+                string altHex = BitConverter.ToString(altitudeBytes).Replace("-", " ");
+                Debug.WriteLine($"🔍 İrtifa byte analizi: {altHex} -> {data.RocketAltitude:F2}m");
+
+                Debug.WriteLine($"✅ Roket paketi başarıyla parse edildi!");
+                Debug.WriteLine("========================================");
                 return data;
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Rocket telemetry parse hatası: {ex.Message}");
+                Debug.WriteLine($"❌ Rocket telemetry parse hatası: {ex.Message}");
+                Debug.WriteLine($"📊 Exception Stack: {ex.StackTrace}");
                 return null;
             }
         }
@@ -2033,12 +2147,12 @@ namespace copilot_deneme
                 BitConverter.GetBytes(data.RocketGpsAltitude).CopyTo(packet, offset); offset += 4;
                 BitConverter.GetBytes(data.RocketLatitude).CopyTo(packet, offset); offset += 4;
                 BitConverter.GetBytes(data.RocketLongitude).CopyTo(packet, offset); offset += 4;
-                BitConverter.GetBytes(data.GyroX).CopyTo(packet, offset); offset += 4;
-                BitConverter.GetBytes(data.GyroY).CopyTo(packet, offset); offset += 4;
-                BitConverter.GetBytes(data.GyroZ).CopyTo(packet, offset); offset += 4;
-                BitConverter.GetBytes(data.AccelX).CopyTo(packet, offset); offset += 4;
-                BitConverter.GetBytes(data.AccelY).CopyTo(packet, offset); offset += 4;
-                BitConverter.GetBytes(data.AccelZ).CopyTo(packet, offset); offset += 4;
+                BitConverter.GetBytes(data.GyroX).CopyTo(packet, offset); offset += 4;  // ✅ DÜZELTME
+                BitConverter.GetBytes(data.GyroY).CopyTo(packet, offset); offset += 4;  // ✅ DÜZELTME
+                BitConverter.GetBytes(data.GyroZ).CopyTo(packet, offset); offset += 4;  // ✅ DÜZELTME
+                BitConverter.GetBytes(data.AccelX).CopyTo(packet, offset); offset += 4; // ✅ DÜZELTME
+                BitConverter.GetBytes(data.AccelY).CopyTo(packet, offset); offset += 4; // ✅ DÜZELTME
+                BitConverter.GetBytes(data.AccelZ).CopyTo(packet, offset); offset += 4; // ✅ DÜZELTME
                 BitConverter.GetBytes(data.Angle).CopyTo(packet, offset); offset += 4;
                 BitConverter.GetBytes(data.RocketSpeed).CopyTo(packet, offset); offset += 4;
                 BitConverter.GetBytes(data.RocketTemperature).CopyTo(packet, offset); offset += 4;
@@ -2081,6 +2195,35 @@ namespace copilot_deneme
                 Debug.WriteLine($"HYIDenem paket dönüştürme hatası: {ex.Message}");
                 return new byte[HYIDENEM_PACKET_SIZE];
             }
+        }
+        
+        /// <summary>
+        /// ✨ YENİ: Sadece Arduino verilerinden HYI üretimi aktif et (random HYI paketi üretimi olmadan)
+        /// </summary>
+        public void EnableAutoHyiGenerationOnly()
+        {
+            IsAutoHyiGenerationEnabled = true;
+            OnDataReceived?.Invoke("🚀➡️📡 Arduino verilerinden HYI üretimi AKTİF EDİLDİ!");
+            
+            Debug.WriteLine($"🔧 Sadece Arduino->HYI üretimi aktif edildi:");
+            Debug.WriteLine($"   - IsAutoHyiGenerationEnabled: {IsAutoHyiGenerationEnabled}");
+            Debug.WriteLine($"   - IsHyiTestMode: {IsHyiTestMode}");
+            
+            _logger?.LogInformation("Arduino verilerinden HYI üretimi aktif edildi");
+        }
+
+        /// <summary>
+        /// ✨ YENİ: Arduino verilerinden HYI üretimini durdur
+        /// </summary>
+        public void DisableAutoHyiGeneration()
+        {
+            IsAutoHyiGenerationEnabled = false;
+            OnDataReceived?.Invoke("🛑 Arduino verilerinden HYI üretimi DURDURULDU!");
+            
+            Debug.WriteLine($"🔧 Arduino->HYI üretimi durduruldu:");
+            Debug.WriteLine($"   - IsAutoHyiGenerationEnabled: {IsAutoHyiGenerationEnabled}");
+            
+            _logger?.LogInformation("Arduino verilerinden HYI üretimi durduruldu");
         }
     }
 }

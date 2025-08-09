@@ -38,6 +38,28 @@
             <Setter Property="Margin" Value="0,0,8,0"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
+
+        <!-- GPS Koordinat stilleri -->
+        <Style x:Key="GpsCoordTextBoxStyle" TargetType="TextBox">
+            <Setter Property="Background" Value="#2A2D2E"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="12,8"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontFamily" Value="Consolas"/>
+            <Setter Property="IsReadOnly" Value="True"/>
+            <Setter Property="Margin" Value="4"/>
+        </Style>
+
+        <Style x:Key="GpsLabelStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#E0E0E0"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="4,2"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
     </Page.Resources>
 
     <Grid>
@@ -49,6 +71,7 @@
         </Grid.Background>
         
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
@@ -68,7 +91,7 @@
                           Foreground="{StaticResource AccentBrush}" 
                           FontSize="24" 
                           Margin="0,0,12,0"/>
-                <TextBlock Text="Telemetri Grafikleri"
+                <TextBlock Text="Telemetri Grafikleri ve GPS Koordinatları"
                            FontSize="20"
                            FontWeight="SemiBold"
                            Foreground="White"/>
@@ -78,8 +101,98 @@
             </StackPanel>
         </Border>
 
+        <!-- GPS Koordinat Paneli -->
+        <Border Grid.Row="1"
+                Background="{StaticResource CardBrush}"
+                CornerRadius="16"
+                Margin="16,8,16,8"
+                BorderBrush="{StaticResource SecondaryBrush}"
+                BorderThickness="1"
+                Translation="0,0,8">
+            <Grid Margin="20,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Roket GPS Koordinatları -->
+                <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,12">
+                        <FontIcon Glyph="&#xE81C;" 
+                                  Foreground="#FF6B73" 
+                                  FontSize="18" 
+                                  Margin="0,0,8,0"/>
+                        <TextBlock Text="🚀 Roket GPS Koordinatları" 
+                                   FontSize="16" 
+                                   FontWeight="SemiBold" 
+                                   Foreground="White"/>
+                    </StackPanel>
+                    
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Enlem:" Style="{StaticResource GpsLabelStyle}"/>
+                        <TextBox Grid.Row="0" Grid.Column="1" 
+                                 x:Name="RocketLatitudeTextBox" 
+                                 Text="38.536000"
+                                 Style="{StaticResource GpsCoordTextBoxStyle}"/>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Boylam:" Style="{StaticResource GpsLabelStyle}"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" 
+                                 x:Name="RocketLongitudeTextBox" 
+                                 Text="27.022000"
+                                 Style="{StaticResource GpsCoordTextBoxStyle}"/>
+                    </Grid>
+                </StackPanel>
+
+                <!-- Payload GPS Koordinatları -->
+                <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,12">
+                        <FontIcon Glyph="&#xEB42;" 
+                                  Foreground="#4CAF50" 
+                                  FontSize="18" 
+                                  Margin="0,0,8,0"/>
+                        <TextBlock Text="📡 Payload GPS Koordinatları" 
+                                   FontSize="16" 
+                                   FontWeight="SemiBold" 
+                                   Foreground="White"/>
+                    </StackPanel>
+                    
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Enlem:" Style="{StaticResource GpsLabelStyle}"/>
+                        <TextBox Grid.Row="0" Grid.Column="1" 
+                                 x:Name="PayloadLatitudeTextBox" 
+                                 Text="38.536000"
+                                 Style="{StaticResource GpsCoordTextBoxStyle}"/>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Boylam:" Style="{StaticResource GpsLabelStyle}"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" 
+                                 x:Name="PayloadLongitudeTextBox" 
+                                 Text="27.022000"
+                                 Style="{StaticResource GpsCoordTextBoxStyle}"/>
+                    </Grid>
+                </StackPanel>
+            </Grid>
+        </Border>
+
         <!-- Charts Grid -->
-        <Grid Grid.Row="1" Margin="8">
+        <Grid Grid.Row="2" Margin="8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="*"/>

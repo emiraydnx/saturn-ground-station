@@ -77,5 +77,10 @@ namespace copilot_deneme
             byte status);
         Task<bool> SendZeroValueHyiPacket();
         #endregion
+
+        #region HYI Generation Methods
+        void EnableAutoHyiGenerationOnly();
+        void DisableAutoHyiGeneration();
+        #endregion
     }
 }
