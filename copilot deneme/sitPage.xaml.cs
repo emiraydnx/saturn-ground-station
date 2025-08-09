@@ -6,6 +6,8 @@ using Microsoft.UI.Xaml.Navigation;
 using System;
 using System.Globalization;
 using System.Threading.Tasks;
+using copilot_deneme.TelemetryData;
+using copilot_deneme.Services;
 
 namespace copilot_deneme
 {
@@ -42,6 +44,16 @@ namespace copilot_deneme
             InitializeGpsMap();
             
             System.Diagnostics.Debug.WriteLine("sitPage başlatıldı - SerialPortService bağlantısı bekleniyor");
+        }
+
+        protected override void OnNavigatedTo(NavigationEventArgs e)
+        {
+            base.OnNavigatedTo(e);
+            
+            // ✨ YENİ: Navigation olduğunda SerialPortService bağlantısını kontrol et
+            ConnectToSerialPortService();
+            
+            System.Diagnostics.Debug.WriteLine("sitPage navigasyonu tamamlandı - Port durumu kontrol edildi");
         }
 
         private async void InitializeThreeDWebView()
@@ -160,49 +172,6 @@ namespace copilot_deneme
             50% {{ box-shadow: 0 0 16px rgba(68,255,68,1), 0 0 24px rgba(68,255,68,0.6); }}
             100% {{ box-shadow: 0 0 8px rgba(68,255,68,0.9); }}
         }}
-        .info-panel {{
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            background: rgba(0,0,0,0.85);
-            color: white;
-            padding: 12px 16px;
-            border-radius: 8px;
-            font-size: 13px;
-            z-index: 1000;
-            min-width: 200px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-        }}
-        .info-title {{
-            font-weight: bold;
-            font-size: 14px;
-            margin-bottom: 8px;
-            color: #64B5F6;
-        }}
-        .coord-row {{
-            margin: 4px 0;
-            display: flex;
-            justify-content: space-between;
-        }}
-        .altitude-panel {{
-            position: absolute;
-            top: 15px;
-            left: 15px;
-            background: rgba(0,0,0,0.85);
-            color: white;
-            padding: 12px 16px;
-            border-radius: 8px;
-            font-size: 12px;
-            z-index: 1000;
-            min-width: 160px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-        }}
-        .alt-title {{
-            font-weight: bold;
-            font-size: 13px;
-            margin-bottom: 6px;
-            color: #81C784;
-        }}
         .legend-panel {{
             position: absolute;
             bottom: 15px;
@@ -218,22 +187,6 @@ namespace copilot_deneme
 </head>
 <body>
     <div id='map'></div>
-
-    <!-- ✅ EKSİK KOORDİNAT PANELLERİ EKLENDİ -->
-    <div class='info-panel'>
-        <div class='info-title'>🚀 Roket Konumu</div>
-        <div class='coord-row'><span>Enlem:</span> <span id='rocket-coords'>--</span></div>
-        <div class='coord-row'><span>İrtifa:</span> <span id='rocket-alt'>-- m</span></div>
-        
-        <div class='info-title' style='margin-top: 12px;'>🟢 Payload Konumu</div>
-        <div class='coord-row'><span>Enlem:</span> <span id='payload-coords'>--</span></div>
-        <div class='coord-row'><span>İrtifa:</span> <span id='payload-alt'>-- m</span></div>
-        
-        <div class='coord-row' style='margin-top: 8px; border-top: 1px solid #444; padding-top: 8px;'>
-            <span><strong>Mesafe:</strong></span> <span id='distance'>-- m</span>
-        </div>
-        <div class='coord-row'><span>Son Güncelleme:</span> <span id='last-update'>--:--:--</span></div>
-    </div>
 
     <div class='legend-panel'>
         <div style='font-weight: bold; margin-bottom: 4px;'>Açıklama</div>
@@ -311,12 +264,6 @@ namespace copilot_deneme
                 var newPos = [lat, lon];
                 rocketMarker.setLatLng(newPos);
                 rocketPath.addLatLng(newPos);
-                
-                // Koordinat bilgisini güncelle
-                document.getElementById('rocket-coords').textContent = lat.toFixed(6) + ', ' + lon.toFixed(6);
-                document.getElementById('rocket-alt').textContent = alt.toFixed(2) + ' m';
-                updateLastUpdateTime();
-                updateDistance();
                 fitMapToBounds();
                 console.log('✅ Roket marker güncellendi:', lat.toFixed(6), lon.toFixed(6));
             }} else {{
@@ -330,12 +277,6 @@ namespace copilot_deneme
                 var newPos = [lat, lon];
                 payloadMarker.setLatLng(newPos);
                 payloadPath.addLatLng(newPos);
-                
-                // Koordinat bilgisini güncelle
-                document.getElementById('payload-coords').textContent = lat.toFixed(6) + ', ' + lon.toFixed(6);
-                document.getElementById('payload-alt').textContent = alt.toFixed(2) + ' m';
-                updateLastUpdateTime();
-                updateDistance();
                 fitMapToBounds();
                 console.log('✅ Payload marker güncellendi:', lat.toFixed(6), lon.toFixed(6));
             }} else {{
@@ -351,8 +292,6 @@ namespace copilot_deneme
                 var rocketPos = [rocketLat, rocketLon];
                 rocketMarker.setLatLng(rocketPos);
                 rocketPath.addLatLng(rocketPos);
-                document.getElementById('rocket-coords').textContent = rocketLat.toFixed(6) + ', ' + rocketLon.toFixed(6);
-                document.getElementById('rocket-alt').textContent = rocketAlt.toFixed(2) + ' m';
                 updated = true;
                 console.log('✅ Roket güncellendi:', rocketLat.toFixed(6), rocketLon.toFixed(6));
             }} else {{
@@ -363,8 +302,6 @@ namespace copilot_deneme
                 var payloadPos = [payloadLat, payloadLon];
                 payloadMarker.setLatLng(payloadPos);
                 payloadPath.addLatLng(payloadPos);
-                document.getElementById('payload-coords').textContent = payloadLat.toFixed(6) + ', ' + payloadLon.toFixed(6);
-                document.getElementById('payload-alt').textContent = payloadAlt.toFixed(2) + ' m';
                 updated = true;
                 console.log('✅ Payload güncellendi:', payloadLat.toFixed(6), payloadLon.toFixed(6));
             }} else {{
@@ -372,18 +309,9 @@ namespace copilot_deneme
             }}
             
             if (updated) {{
-                updateLastUpdateTime();
-                updateDistance();
                 fitMapToBounds();
             }}
         }};
-        
-        function updateDistance() {{
-            var rocketPos = rocketMarker.getLatLng();
-            var payloadPos = payloadMarker.getLatLng();
-            var distance = calculateDistance(rocketPos.lat, rocketPos.lng, payloadPos.lat, payloadPos.lng);
-            document.getElementById('distance').textContent = distance.toFixed(2) + ' m';
-        }}
         
         function fitMapToBounds() {{
             var group = new L.featureGroup([rocketMarker, payloadMarker]);
@@ -392,18 +320,6 @@ namespace copilot_deneme
                 map.fitBounds(bounds.pad(0.15));
             }}
         }}
-        
-        function updateLastUpdateTime() {{
-            var now = new Date();
-            var timeStr = now.getHours().toString().padStart(2, '0') + ':' + 
-                         now.getMinutes().toString().padStart(2, '0') + ':' + 
-                         now.getSeconds().toString().padStart(2, '0');
-            document.getElementById('last-update').textContent = timeStr;
-        }}
-        
-        // İlk güncelleme
-        updateLastUpdateTime();
-        updateDistance();
         
         // ✅ DEBUG İÇİN CONSOLE LOGLAMASINI AKTİF ET
         console.log('🌍 GPS Harita sistemi başlatıldı - Koordinat güncellemeleri bekleniyor...');
@@ -584,7 +500,7 @@ namespace copilot_deneme
             });
         }
 
-        private void OnTelemetryDataUpdated(SerialPortService.RocketTelemetryData rocketData, SerialPortService.PayloadTelemetryData payloadData)
+        private void OnTelemetryDataUpdated(RocketTelemetryData rocketData, PayloadTelemetryData payloadData)
         {
             _dispatcherQueue.TryEnqueue(() =>
             {
@@ -687,7 +603,7 @@ namespace copilot_deneme
             });
         }
 
-        private void SendDataToCharts(SerialPortService.RocketTelemetryData rocketData, SerialPortService.PayloadTelemetryData payloadData)
+        private void SendDataToCharts(RocketTelemetryData rocketData, PayloadTelemetryData payloadData)
         {
             try
             {
@@ -731,7 +647,7 @@ namespace copilot_deneme
             }
         }
 
-        private void UpdateStatistics(SerialPortService.RocketTelemetryData rocketData, SerialPortService.PayloadTelemetryData payloadData)
+        private void UpdateStatistics(RocketTelemetryData rocketData, PayloadTelemetryData payloadData)
         {
             try
             {
@@ -775,7 +691,39 @@ namespace copilot_deneme
         {
             try
             {
-                // SettingPage'den SerialPortService instance'ını al
+                // ✨ YENİ: Önce GlobalPortManager'dan port durumunu kontrol et
+                var inputPortStatus = GlobalPortManager.GetInputPortStatus();
+                if (inputPortStatus != null && inputPortStatus.IsConnected)
+                {
+                    // GlobalPortManager'dan SerialPortService instance'ını al
+                    _serialPortService = inputPortStatus.ServiceInstance;
+                    
+                    if (_serialPortService != null)
+                    {
+                        // Event handler'ları bağla
+                        _serialPortService.OnTelemetryDataUpdated += OnTelemetryDataUpdated;
+                        _serialPortService.OnDataReceived += OnSerialDataReceived;
+                        _serialPortService.OnRotationDataReceived += OnRotationDataReceived;
+                        
+                        // ✨ YENİ: Sadece roket verilerini debug için dinle
+                        _serialPortService.OnRocketDataUpdated += OnRocketDataReceivedDebug;
+                        
+                        // ViewModel'i al
+                        _viewModel = _serialPortService.ViewModel ?? new ChartViewModel();
+                        
+                        // ✅ Port bağlantı bilgisini göster
+                        System.Diagnostics.Debug.WriteLine($"✅ sitPage GlobalPortManager'dan SerialPortService'e bağlandı: {inputPortStatus.PortName}");
+                        System.Diagnostics.Debug.WriteLine($"📅 Bağlantı zamanı: {inputPortStatus.ConnectedAt:HH:mm:ss}");
+                        System.Diagnostics.Debug.WriteLine($"🔧 Port türü: {inputPortStatus.Type}");
+                        
+                        return;
+                    }
+                }
+
+                // ✨ YENİ: GlobalPortManager'da port yoksa eski yöntemi dene
+                System.Diagnostics.Debug.WriteLine("⚠️ sitPage: GlobalPortManager'da aktif input port bulunamadı, eski yöntemi deneniyor...");
+                
+                // SettingPage'den SerialPortService instance'ını al (backward compatibility)
                 _serialPortService = SettingPage.GetInputSerialPortService();
                 
                 if (_serialPortService != null)
@@ -791,11 +739,11 @@ namespace copilot_deneme
                     // ViewModel'i al
                     _viewModel = _serialPortService.ViewModel ?? new ChartViewModel();
                     
-                    System.Diagnostics.Debug.WriteLine("sitPage SerialPortService'e bağlandı");
+                    System.Diagnostics.Debug.WriteLine("sitPage SerialPortService'e bağlandı (eski yöntem)");
                 }
                 else
                 {
-                    System.Diagnostics.Debug.WriteLine("sitPage: SerialPortService instance bulunamadı!");
+                    System.Diagnostics.Debug.WriteLine("❌ sitPage: SerialPortService instance bulunamadı! Port bağlantısı yapılmamış olabilir.");
                 }
             }
             catch (Exception ex)
@@ -808,7 +756,7 @@ namespace copilot_deneme
         /// 🚀 SADECE ROKET VERİLERİNİ DEBUG KISMINDA YAZDIRAN METOD
         /// Roket telemetri verilerini aynı sıra ile debug output'a yazdırır
         /// </summary>
-        private void OnRocketDataReceivedDebug(SerialPortService.RocketTelemetryData rocketData)
+        private void OnRocketDataReceivedDebug(RocketTelemetryData rocketData)
         {
             try
             {

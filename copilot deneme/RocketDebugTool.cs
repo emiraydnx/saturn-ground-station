@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Diagnostics;
+using copilot_deneme.TelemetryData;
 
 namespace copilot_deneme
 {
@@ -54,21 +55,21 @@ namespace copilot_deneme
             }
         }
 
-        private void OnRocketDataReceived(SerialPortService.RocketTelemetryData rocketData)
+        private void OnRocketDataReceived(RocketTelemetryData rocketData)
         {
             try
             {
-                Console.WriteLine($"?? [{DateTime.Now:HH:mm:ss.fff}] ROKET VERÝSÝ ALINDI:");
-                Console.WriteLine($"   ? Paket No: {rocketData.PacketCounter}");
-                Console.WriteLine($"   ? Ýrtifa: {rocketData.RocketAltitude:F2} m");
-                Console.WriteLine($"   ? GPS Ýrtifa: {rocketData.RocketGpsAltitude:F2} m");
-                Console.WriteLine($"   ? Konum: {rocketData.RocketLatitude:F6}, {rocketData.RocketLongitude:F6}");
+                Console.WriteLine($"???? [{DateTime.Now:HH:mm:ss.fff}] ROKET VERÝSÝ ALINDI:");
+                Console.WriteLine($"   ?? Paket No: {rocketData.PacketCounter}");
+                Console.WriteLine($"   ?? Ýrtifa: {rocketData.RocketAltitude:F2} m");
+                Console.WriteLine($"   ?? GPS Ýrtifa: {rocketData.RocketGpsAltitude:F2} m");
+                Console.WriteLine($"   ?? Konum: {rocketData.RocketLatitude:F6}, {rocketData.RocketLongitude:F6}");
                 Console.WriteLine($"   ? Hýz: {rocketData.RocketSpeed:F2} m/s");
-                Console.WriteLine($"   ? Sýcaklýk: {rocketData.RocketTemperature:F1} °C");
-                Console.WriteLine($"   ? Basýnç: {rocketData.RocketPressure:F1} hPa");
-                Console.WriteLine($"   ? Durum: {rocketData.status}");
-                Console.WriteLine($"   ? CRC: 0x{rocketData.CRC:X2}");
-                Console.WriteLine($"   ? Team ID: {rocketData.TeamID}");
+                Console.WriteLine($"   ??? Sýcaklýk: {rocketData.RocketTemperature:F1} °C");
+                Console.WriteLine($"   ?? Basýnç: {rocketData.RocketPressure:F1} hPa");
+                Console.WriteLine($"   ?? Durum: {rocketData.status}");
+                Console.WriteLine($"   ?? CRC: 0x{rocketData.CRC:X2}");
+                Console.WriteLine($"   ?? Team ID: {rocketData.TeamID}");
                 Console.WriteLine("   " + new string('=', 50));
 
                 Debug.WriteLine($"ROKET DEBUG: Paket #{rocketData.PacketCounter}, Ýrtifa: {rocketData.RocketAltitude:F2}m");

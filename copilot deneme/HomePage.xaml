@@ -32,36 +32,13 @@
         </Grid.Background>
 
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <Border Grid.Row="0" 
-                Style="{StaticResource DataCardStyle}"
-                Margin="16,16,16,8"
-                Translation="0,0,8">
-            <StackPanel Orientation="Horizontal" 
-                        HorizontalAlignment="Center" 
-                        Margin="16,12">
-                <FontIcon Glyph="&#xE8C8;" 
-                          Foreground="{StaticResource SuccessBrush}" 
-                          FontSize="20" 
-                          Margin="0,0,12,0"/>
-                <TextBlock Text="Ana Sayfa - Ham Veri Görüntüleme"
-                           FontSize="18"
-                           FontWeight="SemiBold"
-                           Foreground="White"/>
-                <Ellipse Width="10" Height="10" 
-                         Fill="{StaticResource SuccessBrush}" 
-                         Margin="12,0,0,0"/>
-            </StackPanel>
-        </Border>
-
         <!-- Ana İçerik - Ham Veri Görüntüleme -->
-        <Border Grid.Row="1"
+        <Border Grid.Row="0"
                 Style="{StaticResource DataCardStyle}"
-                Margin="16,8,16,16"
+                Margin="16"
                 Translation="0,0,8">
             <Grid Margin="20">
                 <Grid.RowDefinitions>

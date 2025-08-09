@@ -28,8 +28,9 @@ namespace copilot_deneme
             { typeof(HomePage), 0 },
             { typeof(ChartPage), 1 },
             { typeof(SettingPage), 2 },
-            { typeof(sitPage), 3 },
-            { typeof(ArduinoPage), 4 }
+            { typeof(sitPage), 3 }
+            // ??? ArduinoPage kaldýrýldý
+            // { typeof(ArduinoPage), 4 }
         };
 
         public MainWindow()
@@ -272,9 +273,9 @@ namespace copilot_deneme
                         targetPageType = typeof(sitPage);
                         break;
                     
-                    case "arduino":
-                        targetPageType = typeof(ArduinoPage);
-                        break;
+                    // case "arduino":
+                    //     targetPageType = typeof(ArduinoPage);
+                    //     break;
                 }
 
                 // Sadece farklý bir sayfa seçildiyse navigate et

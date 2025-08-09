@@ -72,40 +72,14 @@
         
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
         
-        <!-- Header -->
-        <Border Grid.Row="0" 
-                Background="{StaticResource CardBrush}" 
-                CornerRadius="16" 
-                Margin="16,16,16,8"
-                BorderBrush="{StaticResource AccentBrush}" 
-                BorderThickness="1"
-                Translation="0,0,8">
-            <StackPanel Orientation="Horizontal" 
-                        HorizontalAlignment="Center" 
-                        Margin="20,16">
-                <FontIcon Glyph="&#xE9D2;" 
-                          Foreground="{StaticResource AccentBrush}" 
-                          FontSize="24" 
-                          Margin="0,0,12,0"/>
-                <TextBlock Text="Telemetri Grafikleri ve GPS Koordinatları"
-                           FontSize="20"
-                           FontWeight="SemiBold"
-                           Foreground="White"/>
-                <Ellipse Width="12" Height="12" 
-                         Fill="{StaticResource SuccessBrush}" 
-                         Margin="12,0,0,0"/>
-            </StackPanel>
-        </Border>
-
         <!-- GPS Koordinat Paneli -->
-        <Border Grid.Row="1"
+        <Border Grid.Row="0"
                 Background="{StaticResource CardBrush}"
                 CornerRadius="16"
-                Margin="16,8,16,8"
+                Margin="16,16,16,8"
                 BorderBrush="{StaticResource SecondaryBrush}"
                 BorderThickness="1"
                 Translation="0,0,8">
@@ -192,7 +166,7 @@
         </Border>
 
         <!-- Charts Grid -->
-        <Grid Grid.Row="2" Margin="8">
+        <Grid Grid.Row="1" Margin="8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="*"/>

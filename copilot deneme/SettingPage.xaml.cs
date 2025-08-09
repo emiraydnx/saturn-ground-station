@@ -11,6 +11,10 @@ using System.IO.Ports;
 using System.Linq;
 using Windows.UI;
 
+// ✨ YENİ: Ayrıştırılan data türlerini ekle
+using copilot_deneme.TelemetryData;
+using copilot_deneme.Services;
+
 namespace copilot_deneme
 {
     public sealed partial class SettingPage : Page
@@ -18,8 +22,8 @@ namespace copilot_deneme
         private readonly ChartViewModel _viewModel;
         private readonly DispatcherQueue _dispatcherQueue;
         private readonly SerialPortService _serialPortService;
-        private SerialPort? _arduinoSerialPort; // Arduino için ayrı SerialPort
-        private bool _isArduinoConnected = false;
+        // 🗑️ Arduino kısmı kaldırıldı - private SerialPort? _arduinoSerialPort;
+        // 🗑️ Arduino kısmı kaldırıldı - private bool _isArduinoConnected = false;
 
         public SettingPage()
         {
@@ -36,6 +40,9 @@ namespace copilot_deneme
             // ViewModel ve Dispatcher'ı ayarla
             _serialPortService.ViewModel = _viewModel;
             _serialPortService.Dispatcher = _dispatcherQueue;
+
+            // ✨ YENİ: GlobalPortManager event'lerini dinle
+            GlobalPortManager.OnPortStatusChanged += OnGlobalPortStatusChanged;
 
             // Event handler'ları kaydet - TÜM EVENT'LERİ EKLE
             try
@@ -55,7 +62,6 @@ namespace copilot_deneme
             
             // İlk yüklemede portları doldur
             RefreshAvailablePorts();
-            RefreshArduinoPorts(); // Arduino portlarını da doldur
             
             // ComboBox'ları güvenli bir şekilde ayarla
             try
@@ -74,8 +80,11 @@ namespace copilot_deneme
             {
                 System.Diagnostics.Debug.WriteLine($"BaudRate ComboBox ayarlama hatası: {ex.Message}");
             }
+
+            // ✨ YENİ: Sayfa yüklendiğinde mevcut port durumlarını kontrol et
+            CheckExistingPortConnections();
             
-            System.Diagnostics.Debug.WriteLine("SettingPage başlatıldı - Instance-based SerialPortService kullanılıyor");
+            System.Diagnostics.Debug.WriteLine("SettingPage başlatıldı - Instance-based SerialPortService kullanılıyor + GlobalPortManager");
         }
 
         private void OnSerialPortError(string errorMessage)
@@ -104,7 +113,7 @@ namespace copilot_deneme
             System.Diagnostics.Debug.WriteLine("Ports refreshed");
         }
         
-        private void OnHYIPacketReceived(SerialPortService.HYITelemetryData data)
+        private void OnHYIPacketReceived(HYITelemetryData data)
         {
             // HYI verisi alındığında log
             _dispatcherQueue.TryEnqueue(() =>
@@ -113,7 +122,7 @@ namespace copilot_deneme
             });
         }
 
-        private void OnRocketDataUpdated(SerialPortService.RocketTelemetryData data)
+        private void OnRocketDataUpdated(RocketTelemetryData data)
         {
             // Roket verisi alındığında log
             _dispatcherQueue.TryEnqueue(() =>
@@ -125,7 +134,7 @@ namespace copilot_deneme
             });
         }
 
-        private void OnPayloadDataUpdated(SerialPortService.PayloadTelemetryData data)
+        private void OnPayloadDataUpdated(PayloadTelemetryData data)
         {
             // Payload verisi alındığında log
             _dispatcherQueue.TryEnqueue(() =>
@@ -134,7 +143,7 @@ namespace copilot_deneme
             });
         }
 
-        private void OnTelemetryDataUpdated(SerialPortService.RocketTelemetryData rocketData, SerialPortService.PayloadTelemetryData payloadData)
+        private void OnTelemetryDataUpdated(RocketTelemetryData rocketData, PayloadTelemetryData payloadData)
         {
             // Telemetri verisi kombinasyonu alındığında log
             _dispatcherQueue.TryEnqueue(() =>
@@ -189,6 +198,15 @@ namespace copilot_deneme
                 var portName = PortComboBox_Input.SelectedItem as string;
                 if (string.IsNullOrEmpty(portName)) 
                     throw new InvalidOperationException("Giriş için bir port seçin.");
+
+                // ✨ YENİ: Port kullanımda mı kontrol et
+                if (GlobalPortManager.IsPortInUse(portName))
+                {
+                    var usageInfo = GlobalPortManager.GetPortUsageInfo(portName);
+                    StatusText_Input.Text = $"❌ Port zaten {usageInfo}";
+                    System.Diagnostics.Debug.WriteLine($"Port kullanım engeli: {portName} - {usageInfo}");
+                    return;
+                }
                 
                 // BaudRate ComboBox'tan güvenli değer alma
                 string baudRateStr = "115200"; // Default
@@ -211,8 +229,8 @@ namespace copilot_deneme
                 await _serialPortService.InitializeAsync(portName, baudRate);
                 await _serialPortService.StartReadingAsync();
 
-                StatusIndicator_Input.Fill = new SolidColorBrush(Colors.LightGreen);
-                StatusText_Input.Text = $"Bağlandı: {portName} ({baudRate})";
+                // ✨ YENİ: GlobalPortManager'a kaydet
+                GlobalPortManager.RegisterInputPort(portName, baudRate, _serialPortService);
                 
                 System.Diagnostics.Debug.WriteLine($"Input port bağlandı: {portName} @ {baudRate}");
             }
@@ -229,8 +247,10 @@ namespace copilot_deneme
             try
             {
                 await _serialPortService.StopReadingAsync();
-                StatusIndicator_Input.Fill = new SolidColorBrush(Colors.Red);
-                StatusText_Input.Text = "Giriş Portu Kapalı";
+                
+                // ✨ YENİ: GlobalPortManager'dan kayıt kaldır
+                GlobalPortManager.UnregisterInputPort();
+                
                 System.Diagnostics.Debug.WriteLine("Input port kapatıldı");
             }
             catch (Exception ex)
@@ -248,8 +268,17 @@ namespace copilot_deneme
                 if (string.IsNullOrEmpty(portName))
                     throw new InvalidOperationException("Çıkış için bir port seçin.");
 
+                // ✨ YENİ: Port kullanımda mı kontrol et
+                if (GlobalPortManager.IsPortInUse(portName))
+                {
+                    var usageInfo = GlobalPortManager.GetPortUsageInfo(portName);
+                    StatusText_Output.Text = $"❌ Port zaten {usageInfo}";
+                    System.Diagnostics.Debug.WriteLine($"Port kullanım engeli: {portName} - {usageInfo}");
+                    return;
+                }
+
                 // BaudRate ComboBox'tan güvenli değer alma
-                string baudRateStr = "115200"; // Default
+                string baudRateStr = "19200"; // Default
                 try
                 {
                     var selectedBaudItem = BaudRateComboBox_Output.SelectedItem as ComboBoxItem;
@@ -268,8 +297,8 @@ namespace copilot_deneme
                 // Input SerialPortService'in output port'unu başlat
                 await _serialPortService.InitializeOutputPortAsync(portName, baudRate);
 
-                StatusIndicator_Output.Fill = new SolidColorBrush(Colors.LightGreen);
-                StatusText_Output.Text = $"HYI Output Aktif: {portName} ({baudRate})";
+                // ✨ YENİ: GlobalPortManager'a kaydet
+                GlobalPortManager.RegisterOutputPort(portName, baudRate, _serialPortService);
 
                 System.Diagnostics.Debug.WriteLine($"Output port bağlandı: {portName} @ {baudRate}");
             }
@@ -286,8 +315,10 @@ namespace copilot_deneme
             try
             {
                 await _serialPortService.CloseOutputPortAsync();
-                StatusIndicator_Output.Fill = new SolidColorBrush(Colors.Red);
-                StatusText_Output.Text = "Çıkış Portu Kapalı";
+                
+                // ✨ YENİ: GlobalPortManager'dan kayıt kaldır
+                GlobalPortManager.UnregisterOutputPort();
+                
                 System.Diagnostics.Debug.WriteLine("Output port kapatıldı");
             }
             catch (Exception ex)
@@ -545,17 +576,7 @@ namespace copilot_deneme
             return _currentInputInstance;
         }
 
-        // Arduino SerialPort için static accessor
-        public static SerialPort? GetArduinoSerialPortService()
-        {
-            return _currentArduinoInstance;
-        }
-
-        // Arduino verisi güncellemek için ArduinoPage'e erişim
-        public static Action<float, float, float, float, float, float, float, float>? ArduinoDataUpdateCallback { get; set; }
-
         private static SerialPortService? _currentInputInstance;
-        private static SerialPort? _currentArduinoInstance;
 
         protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
         {
@@ -563,7 +584,7 @@ namespace copilot_deneme
             
             // Global erişim için instance'ı kaydet
             _currentInputInstance = _serialPortService;
-            _currentArduinoInstance = _arduinoSerialPort; // Arduino instance'ını da kaydet
+            // 🗑️ Arduino kısmı kaldırıldı - _currentArduinoInstance = _arduinoSerialPort;
             System.Diagnostics.Debug.WriteLine("SettingPage navigasyonu tamamlandı");
         }
 
@@ -577,6 +598,9 @@ namespace copilot_deneme
             _serialPortService.OnPayloadDataUpdated -= OnPayloadDataUpdated;
             _serialPortService.OnTelemetryDataUpdated -= OnTelemetryDataUpdated;
             _serialPortService.OnError -= OnSerialPortError;
+
+            // ✨ YENİ: GlobalPortManager event handler'ını kaldır
+            GlobalPortManager.OnPortStatusChanged -= OnGlobalPortStatusChanged;
             
             System.Diagnostics.Debug.WriteLine("SettingPage'den ayrıldı - Event handler'lar kaldırıldı");
         }
@@ -585,16 +609,24 @@ namespace copilot_deneme
         {
             try
             {
+                // ✨ YENİ: GlobalPortManager event handler'ını kaldır
+                GlobalPortManager.OnPortStatusChanged -= OnGlobalPortStatusChanged;
+
                 await _serialPortService.DisposeAsync();
                 
-                // Arduino bağlantısını da kapat
-                if (_arduinoSerialPort?.IsOpen == true)
-                {
-                    _arduinoSerialPort.Close();
-                }
-                _arduinoSerialPort?.Dispose();
+                // 🗑️ Arduino bağlantısını da kapat - kaldırıldı
+                // if (_arduinoSerialPort?.IsOpen == true)
+                // {
+                //     _arduinoSerialPort.Close();
+                // }
+                // _arduinoSerialPort?.Dispose();
+
+                // ✨ YENİ: GlobalPortManager kayıtlarını temizle
+                GlobalPortManager.UnregisterInputPort();
+                GlobalPortManager.UnregisterOutputPort();
+                // 🗑️ Arduino kısmı kaldırıldı - GlobalPortManager.UnregisterArduinoPort();
                 
-                System.Diagnostics.Debug.WriteLine("SettingPage SerialPortService instance'ları dispose edildi");
+                System.Diagnostics.Debug.WriteLine("SettingPage SerialPortService instance'ları dispose edildi + GlobalPortManager temizlendi");
             }
             catch (Exception ex)
             {
@@ -602,261 +634,135 @@ namespace copilot_deneme
             }
         }
 
-        // Arduino Port Management Methods
-        private void RefreshArduinoPorts()
+        /// <summary>
+        /// ✨ YENİ: GlobalPortManager'dan gelen port durumu değişikliklerini işle
+        /// </summary>
+        private void OnGlobalPortStatusChanged(string portKey, GlobalPortManager.PortConnectionInfo connectionInfo)
         {
-            try
+            _dispatcherQueue.TryEnqueue(() =>
             {
-                string[] availablePorts = SerialPort.GetPortNames();
-                var currentSelection = ArduinoPortComboBox.SelectedItem as string;
-
-                ArduinoPortComboBox.ItemsSource = availablePorts;
-
-                if (availablePorts.Contains(currentSelection))
-                    ArduinoPortComboBox.SelectedItem = currentSelection;
-                else if (availablePorts.Length > 0)
-                    ArduinoPortComboBox.SelectedIndex = 0;
-
-                System.Diagnostics.Debug.WriteLine($"Arduino portları yenilendi: {availablePorts.Length} port bulundu");
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Arduino port listesi alma hatası: {ex.Message}");
-            }
-        }
-
-        private void RefreshArduinoPorts_Click(object sender, RoutedEventArgs e)
-        {
-            RefreshArduinoPorts();
-        }
-
-        private async void ConnectArduino_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                var portName = ArduinoPortComboBox.SelectedItem as string;
-                if (string.IsNullOrEmpty(portName))
-                    throw new InvalidOperationException("Arduino için bir port seçin.");
-
-                // BaudRate değerini al
-                string baudRateStr = "115200"; // Default
                 try
                 {
-                    var selectedBaudItem = ArduinoBaudRateComboBox.SelectedItem as ComboBoxItem;
-                    if (selectedBaudItem?.Content != null)
+                    System.Diagnostics.Debug.WriteLine($"🔌 SettingPage: Port durumu değişti - {portKey}: {connectionInfo.StatusText}");
+
+                    switch (portKey)
                     {
-                        baudRateStr = selectedBaudItem.Content.ToString();
+                        case "Input":
+                            UpdateInputPortUI(connectionInfo);
+                            break;
+                        case "Output":
+                            UpdateOutputPortUI(connectionInfo);
+                            break;
+            
                     }
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Arduino BaudRate alma hatası: {ex.Message}");
+                    System.Diagnostics.Debug.WriteLine($"Port durumu güncelleme hatası: {ex.Message}");
                 }
-
-                var baudRate = int.Parse(baudRateStr);
-
-                // Mevcut bağlantıyı kapat
-                if (_arduinoSerialPort?.IsOpen == true)
-                {
-                    _arduinoSerialPort.Close();
-                }
-                _arduinoSerialPort?.Dispose();
-
-                // Yeni bağlantı oluştur
-                _arduinoSerialPort = new SerialPort(portName, baudRate)
-                {
-                    DataBits = 8,
-                    Parity = Parity.None,
-                    StopBits = StopBits.One,
-                    Handshake = Handshake.None,
-                    ReadTimeout = 2000,
-                    WriteTimeout = 2000
-                };
-
-                _arduinoSerialPort.DataReceived += ArduinoSerialPort_DataReceived;
-                _arduinoSerialPort.Open();
-
-                _isArduinoConnected = true;
-                ArduinoStatusIndicator.Fill = new SolidColorBrush(Colors.LightGreen);
-                ArduinoStatusText.Text = $"Bağlı: {portName}";
-                ConnectArduinoButton.IsEnabled = false;
-                DisconnectArduinoButton.IsEnabled = true;
-
-                // Global instance'ı güncelle
-                _currentArduinoInstance = _arduinoSerialPort;
-
-                System.Diagnostics.Debug.WriteLine($"Arduino manuel olarak bağlandı: {portName} @ {baudRate}");
-            }
-            catch (Exception ex)
-            {
-                ArduinoStatusIndicator.Fill = new SolidColorBrush(Colors.Red);
-                ArduinoStatusText.Text = $"Hata: {ex.Message}";
-                System.Diagnostics.Debug.WriteLine($"Arduino bağlantı hatası: {ex.Message}");
-            }
+            });
         }
 
-        private void DisconnectArduino_Click(object sender, RoutedEventArgs e)
+        /// <summary>
+        /// ✨ YENİ: Input port UI'sını güncelle
+        /// </summary>
+        private void UpdateInputPortUI(GlobalPortManager.PortConnectionInfo connectionInfo)
         {
-            try
+            if (connectionInfo.IsConnected)
             {
-                if (_arduinoSerialPort?.IsOpen == true)
-                {
-                    _arduinoSerialPort.Close();
-                }
-                _arduinoSerialPort?.Dispose();
-                _arduinoSerialPort = null;
-
-                _isArduinoConnected = false;
-                ArduinoStatusIndicator.Fill = new SolidColorBrush(Colors.Red);
-                ArduinoStatusText.Text = "Bağlı Değil";
-                ConnectArduinoButton.IsEnabled = true;
-                DisconnectArduinoButton.IsEnabled = false;
-
-                // Global instance'ı temizle
-                _currentArduinoInstance = null;
-
-                // Test verilerini sıfırla
-                ArduinoYawText.Text = "Yaw: --°";
-                ArduinoPitchText.Text = "Pitch: --°";
-                ArduinoRollText.Text = "Roll: --°";
-                ArduinoAccelText.Text = "İvme: -- m/s²";
-                ArduinoPressureText.Text = "Basınç: -- hPa";
-                ArduinoAltitudeText.Text = "İrtifa: -- m";
-                ArduinoTemperatureText.Text = "Sıcaklık: --°C";
-                ArduinoPressureRateText.Text = "dP/dt: -- hPa/s";
-
-                System.Diagnostics.Debug.WriteLine("Arduino bağlantısı kapatıldı");
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Arduino kapatma hatası: {ex.Message}");
-            }
-        }
-
-        private void ArduinoSerialPort_DataReceived(object sender, SerialDataReceivedEventArgs e)
-        {
-            try
-            {
-                if (_arduinoSerialPort?.IsOpen != true) return;
-
-                string data = _arduinoSerialPort.ReadLine().Trim();
-
-                if (!string.IsNullOrEmpty(data))
-                {
-                    ParseAndDisplayArduinoData(data);
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Arduino veri okuma hatası: {ex.Message}");
-            }
-        }
-
-        private void ParseAndDisplayArduinoData(string data)
-        {
-            try
-            {
-                // Debug için ham veriyi logla
-                System.Diagnostics.Debug.WriteLine($"SettingPage Arduino HAM VERİ: {data}");
+                StatusIndicator_Input.Fill = new SolidColorBrush(Colors.LightGreen);
+                StatusText_Input.Text = connectionInfo.StatusText;
+                // XAML'deki butonların x:Name'leri yoktu, doğrudan içerik değiştirebiliriz
+                // ConnectInputPortButton.IsEnabled = false;
+                // DisconnectInputPortButton.IsEnabled = true;
                 
-                // Arduino çıktı formatını parse et
-                var yawMatch = System.Text.RegularExpressions.Regex.Match(data, @"Yaw:\s*([\d\.-]+)");
-                var pitchMatch = System.Text.RegularExpressions.Regex.Match(data, @"Pitch:\s*([\d\.-]+)");
-                var rollMatch = System.Text.RegularExpressions.Regex.Match(data, @"Roll:\s*([\d\.-]+)");
-                var accelMatch = System.Text.RegularExpressions.Regex.Match(data, @"Accel:\s*([\d\.-]+)");
-                var pressureMatch = System.Text.RegularExpressions.Regex.Match(data, @"Pressure:\s*([\d\.-]+)");
-                var altitudeMatch = System.Text.RegularExpressions.Regex.Match(data, @"Altitude:\s*([\d\.-]+)");
-                var temperatureMatch = System.Text.RegularExpressions.Regex.Match(data, @"Temperature:\s*([\d\.-]+)");
-                var pressureRateMatch = System.Text.RegularExpressions.Regex.Match(data, @"PressureRate:\s*([\d\.-]+)");
+                // ComboBox'ları disable et
+                PortComboBox_Input.IsEnabled = false;
+                BaudRateComboBox_Input.IsEnabled = false;
+            }
+            else
+            {
+                StatusIndicator_Input.Fill = new SolidColorBrush(Colors.Red);
+                StatusText_Input.Text = connectionInfo.StatusText;
+                // ConnectInputPortButton.IsEnabled = true;
+                // DisconnectInputPortButton.IsEnabled = false;
+                
+                // ComboBox'ları enable et
+                PortComboBox_Input.IsEnabled = true;
+                BaudRateComboBox_Input.IsEnabled = true;
+            }
+        }
 
-                _dispatcherQueue.TryEnqueue(() =>
+        /// <summary>
+        /// ✨ YENİ: Output port UI'sını güncelle
+        /// </summary>
+        private void UpdateOutputPortUI(GlobalPortManager.PortConnectionInfo connectionInfo)
+        {
+            if (connectionInfo.IsConnected)
+            {
+                StatusIndicator_Output.Fill = new SolidColorBrush(Colors.LightGreen);
+                StatusText_Output.Text = connectionInfo.StatusText;
+                // ConnectOutputPortButton.IsEnabled = false;
+                // DisconnectOutputPortButton.IsEnabled = true;
+                
+                // ComboBox'ları disable et
+                PortComboBox_Output.IsEnabled = false;
+                BaudRateComboBox_Output.IsEnabled = false;
+            }
+            else
+            {
+                StatusIndicator_Output.Fill = new SolidColorBrush(Colors.Red);
+                StatusText_Output.Text = connectionInfo.StatusText;
+                // ConnectOutputPortButton.IsEnabled = true;
+                // DisconnectOutputPortButton.IsEnabled = false;
+                
+                // ComboBox'ları enable et
+                PortComboBox_Output.IsEnabled = true;
+                BaudRateComboBox_Output.IsEnabled = true;
+            }
+        }
+
+        /// <summary>
+        /// ✨ YENİ: Sayfa yüklendiğinde mevcut port bağlantılarını kontrol et
+        /// </summary>
+        private void CheckExistingPortConnections()
+        {
+            try
+            {
+                // Input port durumunu kontrol et
+                var inputPortStatus = GlobalPortManager.GetInputPortStatus();
+                if (inputPortStatus != null)
                 {
-                    if (yawMatch.Success && float.TryParse(yawMatch.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out float yaw))
-                        ArduinoYawText.Text = $"Yaw: {yaw:F1}°";
-
-                    if (pitchMatch.Success && float.TryParse(pitchMatch.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out float pitch))
-                        ArduinoPitchText.Text = $"Pitch: {pitch:F1}°";
-
-                    if (rollMatch.Success && float.TryParse(rollMatch.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out float roll))
-                        ArduinoRollText.Text = $"Roll: {roll:F1}°";
-
-                    if (accelMatch.Success && float.TryParse(accelMatch.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out float accel))
-                        ArduinoAccelText.Text = $"İvme: {accel:F2} m/s²";
-
-                    if (pressureMatch.Success && float.TryParse(pressureMatch.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out float pressure))
-                        ArduinoPressureText.Text = $"Basınç: {pressure:F2} hPa";
-
-                    if (altitudeMatch.Success && float.TryParse(altitudeMatch.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out float altitude))
+                    UpdateInputPortUI(inputPortStatus);
+                    // Mevcut port seçimini güncelle
+                    if (PortComboBox_Input.ItemsSource is string[] ports && ports.Contains(inputPortStatus.PortName))
                     {
-                        // İrtifa değerini makul sınırlar içinde kontrol et
-                        if (altitude >= -1000 && altitude <= 50000)
-                        {
-                            ArduinoAltitudeText.Text = $"İrtifa: {altitude:F1} m";
-                        }
-                        else
-                        {
-                            ArduinoAltitudeText.Text = $"İrtifa: HATA ({altitude:F1})";
-                            System.Diagnostics.Debug.WriteLine($"SettingPage İrtifa DİKKAT: Aşırı değer: {altitude}m");
-                        }
+                        PortComboBox_Input.SelectedItem = inputPortStatus.PortName;
                     }
+                }
 
-                    if (temperatureMatch.Success && float.TryParse(temperatureMatch.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out float temperature))
+                // Output port durumunu kontrol et
+                var outputPortStatus = GlobalPortManager.GetOutputPortStatus();
+                if (outputPortStatus != null)
+                {
+                    UpdateOutputPortUI(outputPortStatus);
+                    // Mevcut port seçimini güncelle
+                    if (PortComboBox_Output.ItemsSource is string[] ports && ports.Contains(outputPortStatus.PortName))
                     {
-                        // Sıcaklık değerini makul sınırlar içinde kontrol et
-                        if (temperature >= -50 && temperature <= 85)
-                        {
-                            ArduinoTemperatureText.Text = $"Sıcaklık: {temperature:F1}°C";
-                        }
-                        else
-                        {
-                            ArduinoTemperatureText.Text = $"Sıcaklık: HATA ({temperature:F1})";
-                            System.Diagnostics.Debug.WriteLine($"SettingPage Sıcaklık DİKKAT: Aşırı değer: {temperature}°C");
-                        }
+                        PortComboBox_Output.SelectedItem = outputPortStatus.PortName;
                     }
+                }
 
-                    if (pressureRateMatch.Success && float.TryParse(pressureRateMatch.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out float pressureRate))
-                        ArduinoPressureRateText.Text = $"dP/dt: {pressureRate:F3} hPa/s";
+                // 🗑️ Arduino port durumunu kontrol et - kaldırıldı
 
-                    // ArduinoPage callback'ini çağır (eğer ArduinoPage açıksa chart'larını güncelle)
-                    if (ArduinoDataUpdateCallback != null)
-                    {
-                        float yawVal = 0, pitchVal = 0, rollVal = 0, accelVal = 0, pressureVal = 0, altitudeVal = 0, temperatureVal = 0, pressureRateVal = 0;
-                        
-                        if (yawMatch.Success && float.TryParse(yawMatch.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out float y)) 
-                            yawVal = y;
-                        if (pitchMatch.Success && float.TryParse(pitchMatch.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out float p)) 
-                            pitchVal = p;
-                        if (rollMatch.Success && float.TryParse(rollMatch.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out float r)) 
-                            rollVal = r;
-                        if (accelMatch.Success && float.TryParse(accelMatch.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out float a)) 
-                            accelVal = a;
-                        if (pressureMatch.Success && float.TryParse(pressureMatch.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out float pr)) 
-                            pressureVal = pr;
-                        if (altitudeMatch.Success && float.TryParse(altitudeMatch.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out float alt) && alt >= -1000 && alt <= 50000) 
-                            altitudeVal = alt;
-                        if (temperatureMatch.Success && float.TryParse(temperatureMatch.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out float temp) && temp >= -50 && temp <= 85) 
-                            temperatureVal = temp;
-                        if (pressureRateMatch.Success && float.TryParse(pressureRateMatch.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out float pRate)) 
-                            pressureRateVal = pRate;
-
-                        try
-                        {
-                            ArduinoDataUpdateCallback(yawVal, pitchVal, rollVal, accelVal, pressureVal, altitudeVal, temperatureVal, pressureRateVal);
-                            System.Diagnostics.Debug.WriteLine($"SettingPage: ArduinoPage callback çağrıldı - İrtifa: {altitudeVal:F1}m, Sıcaklık: {temperatureVal:F1}°C");
-                        }
-                        catch (Exception ex)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"SettingPage: ArduinoPage callback hatası: {ex.Message}");
-                        }
-                    }
-                });
-
-                System.Diagnostics.Debug.WriteLine($"SettingPage Arduino verisi parse edildi");
+                // ✅ Durum raporu
+                System.Diagnostics.Debug.WriteLine(GlobalPortManager.GenerateStatusReport());
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"SettingPage Arduino veri parse hatası: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Mevcut port bağlantıları kontrol hatası: {ex.Message}");
             }
         }
+
     }
 }

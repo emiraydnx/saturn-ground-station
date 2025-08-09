@@ -3,27 +3,42 @@ using copilot_deneme.ViewModels;
 using System;
 using System.Threading.Tasks;
 
+// ? YENÝ: Ayrýþtýrýlan data türlerini ekle
+using copilot_deneme.TelemetryData;
+
 namespace copilot_deneme
 {
+    /// <summary>
+    /// ? YENÝ YAPIYLA GÜNCELLENEN INTERFACE
+    /// Artýk ayrýþtýrýlan data türlerini kullanýr
+    /// Duplicate event'ler ve eski referanslar temizlendi
+    /// </summary>
     public interface ISerialPortService : IAsyncDisposable
     {
         #region Properties
         ChartViewModel? ViewModel { get; set; }
         DispatcherQueue? Dispatcher { get; set; }
         bool IsHyiTestMode { get; set; }
+        
+        // ? YENÝ: Auto HYI Generation kontrolü
+        bool IsAutoHyiGenerationEnabled { get; set; }
         #endregion
 
-        #region Events
+        #region Events - YENÝ DATA TÜRLERÝYLE (ESKÝ DUPLICATE'LAR KALDIRILDI)
         event Action<string>? OnDataReceived;
-        event Action<SerialPortService.PayloadTelemetryData>? OnPayloadDataUpdated;
-        event Action<SerialPortService.RocketTelemetryData>? OnRocketDataUpdated;
-        event Action<SerialPortService.HYITelemetryData>? OnHYIPacketReceived;
+        event Action<PayloadTelemetryData>? OnPayloadDataUpdated;     // ? YENÝ: copilot_deneme.TelemetryData.PayloadTelemetryData
+        event Action<RocketTelemetryData>? OnRocketDataUpdated;       // ? YENÝ: copilot_deneme.TelemetryData.RocketTelemetryData
+        event Action<HYITelemetryData>? OnHYIPacketReceived;          // ? YENÝ: copilot_deneme.TelemetryData.HYITelemetryData
         event Action<float, float, float>? OnRotationDataReceived;
-        event Action<SerialPortService.RocketTelemetryData, SerialPortService.PayloadTelemetryData>? OnTelemetryDataUpdated;
+        event Action<RocketTelemetryData, PayloadTelemetryData>? OnTelemetryDataUpdated; // ? YENÝ: Ayrýþtýrýlan türlerle
         event Action<string>? OnError;
+        
+        // ? YENÝ: HYIDenem event'i
+        event Action<HYIDenemeData>? OnHYIDenemeDataUpdated;          // ? YENÝ: copilot_deneme.TelemetryData.HYIDenemeData
         #endregion
 
         #region Methods
+        #region Serial Port Methods - SADECE PORT YÖNETÝMÝ
         Task InitializeAsync(string portName, int baudRate);
         void Initialize(string portName, int baudRate);
         Task StartReadingAsync();
@@ -34,21 +49,23 @@ namespace copilot_deneme
         void Write(byte[] data);
         bool IsPortOpen();
         string GetPortInfo();
+        #endregion
+
+        #region Chart Update Methods - CHARTUPDATESERVICE'E DELEGATE EDÝLDÝ
         void UpdateChartsFromExternalData(float rocketAltitude, float payloadAltitude,
             float accelX, float accelY, float accelZ, float rocketSpeed, float payloadSpeed,
             float rocketTemp, float payloadTemp, float rocketPressure, float payloadPressure,
-            float payloadHumidity, string source = "External",
-            float rocketAccelX = 0, float rocketAccelY = 0);
+            float payloadHumidity, string source = "External");
         #endregion
 
-        #region Output Port Methods
+        #region Output Port Methods - SADECE PORT YÖNETÝMÝ
         Task InitializeOutputPortAsync(string portName, int baudRate);
         Task WriteToOutputPortAsync(byte[] data);
         bool IsOutputPortOpen();
         Task CloseOutputPortAsync();
         #endregion
 
-        #region HYI Test Methods
+        #region HYI Test Methods - TESTMODEMANAGER'A DELEGATE EDÝLDÝ
         void StartHyiTestMode(int intervalMs = 2000);
         void StopHyiTestMode();
         Task<bool> SendManualHyiTestPacket();
@@ -78,9 +95,14 @@ namespace copilot_deneme
         Task<bool> SendZeroValueHyiPacket();
         #endregion
 
-        #region HYI Generation Methods
+        #region HYI Generation Methods - TESTMODEMANAGER'A DELEGATE EDÝLDÝ
         void EnableAutoHyiGenerationOnly();
         void DisableAutoHyiGeneration();
         #endregion
+        #endregion
     }
+
+    // ===================================================================================================
+    // ? ESKÝ INTERFACE KODLARI - YORUM SATIRINDAN SÝLÝNDÝ
+    // ===================================================================================================
 }
