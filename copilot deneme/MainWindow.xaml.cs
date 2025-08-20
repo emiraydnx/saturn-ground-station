@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -28,8 +29,8 @@ namespace copilot_deneme
             { typeof(HomePage), 0 },
             { typeof(ChartPage), 1 },
             { typeof(SettingPage), 2 },
-            { typeof(sitPage), 3 },
-            { typeof(ArduinoPage), 4 }
+            { typeof(sitPage), 3 }
+            
         };
 
         public MainWindow()
@@ -59,14 +60,14 @@ namespace copilot_deneme
                     var titleBarBrushResource = Application.Current.Resources["TitleBarLogoBrush"];
                     var teamBrushResource = Application.Current.Resources["TeamLogoBrush"];
                     
-                    System.Diagnostics.Debug.WriteLine($"??? TitleBarLogoImage resource: {(titleBarLogoResource != null ? "? Yüklendi" : "? Bulunamadý")}" );
-                    System.Diagnostics.Debug.WriteLine($"??? TeamLogoImage resource: {(teamLogoResource != null ? "? Yüklendi" : "? Bulunamadý")}");
-                    System.Diagnostics.Debug.WriteLine($"?? TitleBarLogoBrush resource: {(titleBarBrushResource != null ? "? Yüklendi" : "? Bulunamadý")}");
-                    System.Diagnostics.Debug.WriteLine($"?? TeamLogoBrush resource: {(teamBrushResource != null ? "? Yüklendi" : "? Bulunamadý")}");
+                    LogDebug($"?? TitleBarLogoImage resource: {(titleBarLogoResource != null ? "? Yüklendi" : "? Bulunamadý")}" );
+                    LogDebug($"?? TeamLogoImage resource: {(teamLogoResource != null ? "? Yüklendi" : "? Bulunamadý")}");
+                    LogDebug($"?? TitleBarLogoBrush resource: {(titleBarBrushResource != null ? "? Yüklendi" : "? Bulunamadý")}");
+                    LogDebug($"?? TeamLogoBrush resource: {(teamBrushResource != null ? "? Yüklendi" : "? Bulunamadý")}");
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"? Resource kontrol hatasý: {ex.Message}");
+                    LogDebug($"? Resource kontrol hatasý: {ex.Message}");
                 }
             }
         }
@@ -78,13 +79,13 @@ namespace copilot_deneme
             SplashOverlay.Opacity = 1.0;
             MainContent.Opacity = 0.0;
             
-            // 3 saniye timer baþlat
+            // Splash süresini 3 saniyeden 1.5 saniyeye düþür - daha hýzlý baþlatma
             _splashTimer = new DispatcherTimer();
-            _splashTimer.Interval = TimeSpan.FromSeconds(3);
+            _splashTimer.Interval = TimeSpan.FromSeconds(1.5);
             _splashTimer.Tick += SplashTimer_Tick;
             _splashTimer.Start();
             
-            System.Diagnostics.Debug.WriteLine("?? Splash screen baþlatýldý - 3 saniye görünecek");
+            LogDebug("?? Splash screen baþlatýldý - 1.5 saniye görünecek");
         }
 
         private void SplashTimer_Tick(object? sender, object e)
@@ -96,7 +97,7 @@ namespace copilot_deneme
             // Fade efekti ile geçiþ yap
             StartFadeTransition();
             
-            System.Diagnostics.Debug.WriteLine("? Splash screen süresi doldu - Fade geçiþi baþlatýlýyor");
+            LogDebug("? Splash screen süresi doldu - Fade geçiþi baþlatýlýyor");
         }
 
         private void StartFadeTransition()
@@ -104,12 +105,12 @@ namespace copilot_deneme
             // Ana uygulamayý hazýrla
             InitializeMainApp();
             
-            // C# kodu ile animasyon oluþtur
+            // Animasyon süresini kýsalt - daha hýzlý geçiþ
             var fadeOutAnimation = new DoubleAnimation
             {
                 From = 1.0,
                 To = 0.0,
-                Duration = new Duration(TimeSpan.FromMilliseconds(800)),
+                Duration = new Duration(TimeSpan.FromMilliseconds(500)), // 800ms -> 500ms
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
             };
             
@@ -128,7 +129,7 @@ namespace copilot_deneme
             };
             
             fadeOutStoryboard.Begin();
-            System.Diagnostics.Debug.WriteLine("?? Splash fade out animasyonu baþlatýldý");
+            LogDebug("?? Splash fade out animasyonu baþlatýldý");
         }
 
         private void StartMainContentFadeIn()
@@ -136,12 +137,12 @@ namespace copilot_deneme
             // Ana içeriði görünür yap (henüz opacity 0)
             MainContent.Visibility = Visibility.Visible;
             
-            // C# kodu ile fade in animasyonu oluþtur
+            // Fade in süresini kýsalt - daha hýzlý geçiþ
             var fadeInAnimation = new DoubleAnimation
             {
                 From = 0.0,
                 To = 1.0,
-                Duration = new Duration(TimeSpan.FromMilliseconds(1000)),
+                Duration = new Duration(TimeSpan.FromMilliseconds(600)), // 1000ms -> 600ms
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
             };
             
@@ -163,12 +164,12 @@ namespace copilot_deneme
                     AppTitleBar.InvalidateArrange();
                     AppTitleBar.InvalidateMeasure();
                     
-                    System.Diagnostics.Debug.WriteLine("? Ana içerik fade in animasyonu tamamlandý - UI yenilendi");
+                    LogDebug("? Ana içerik fade in animasyonu tamamlandý - UI yenilendi");
                 });
             };
             
             fadeInStoryboard.Begin();
-            System.Diagnostics.Debug.WriteLine("?? Ana içerik fade in animasyonu baþlatýldý");
+            LogDebug("?? Ana içerik fade in animasyonu baþlatýldý");
         }
 
         private void InitializeMainApp()
@@ -219,7 +220,7 @@ namespace copilot_deneme
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Custom title bar setup error: {ex.Message}");
+                LogDebug($"Custom title bar setup error: {ex.Message}");
             }
         }
 
@@ -272,9 +273,6 @@ namespace copilot_deneme
                         targetPageType = typeof(sitPage);
                         break;
                     
-                    case "arduino":
-                        targetPageType = typeof(ArduinoPage);
-                        break;
                 }
 
                 // Sadece farklý bir sayfa seçildiyse navigate et
@@ -290,16 +288,23 @@ namespace copilot_deneme
                         _currentPageIndex = targetIndex;
                         
                         string direction = targetIndex > _currentPageIndex ? "?? Saða (FromRight)" : "?? Sola (FromLeft)";
-                        System.Diagnostics.Debug.WriteLine($"?? Navigated to: {targetPageType.Name}");
-                        System.Diagnostics.Debug.WriteLine($"?? Transition: {direction}");
-                        System.Diagnostics.Debug.WriteLine($"?? Index: {_currentPageIndex} ? {targetIndex}");
+                        LogDebug($"?? Navigated to: {targetPageType.Name}");
+                        LogDebug($"?? Transition: {direction}");
+                        LogDebug($"?? Index: {_currentPageIndex} ? {targetIndex}");
                     });
                 }
                 else if (targetPageType == _currentPageType)
                 {
-                    System.Diagnostics.Debug.WriteLine($"?? Already on {targetPageType?.Name}, navigation prevented");
+                    LogDebug($"?? Already on {targetPageType?.Name}, navigation prevented");
                 }
             }
+        }
+        
+        // Conditional Debug Logging - RELEASE'de hiç çalýþmaz
+        [Conditional("DEBUG")]
+        private static void LogDebug(string message)
+        {
+            System.Diagnostics.Debug.WriteLine(message);
         }
     }
 }

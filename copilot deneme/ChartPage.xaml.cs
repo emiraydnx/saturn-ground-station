@@ -1,9 +1,11 @@
 using copilot_deneme.ViewModels;
 using LiveChartsCore.SkiaSharpView.Painting;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using SkiaSharp;
 using System;
+using System.Diagnostics;
 
 namespace copilot_deneme
 {
@@ -11,83 +13,132 @@ namespace copilot_deneme
     {
         private ChartViewModel? _viewModel;
         private SerialPortService? _serialPortService;
+        private readonly DispatcherQueue _dispatcherQueue;
 
-        // ViewModel property for binding
         public ChartViewModel? ViewModel => _viewModel;
 
         public ChartPage()
         {
             this.InitializeComponent();
-            
-            // Chart görünüm ayarlarý
-            AltitudeSeries.LegendTextPaint = new SolidColorPaint(SKColors.White, 10);
-            SpeedSeries.LegendTextPaint = new SolidColorPaint(SKColors.White, 10);
-            AccelSeries.LegendTextPaint = new SolidColorPaint(SKColors.White, 10);
-            TempSeries.LegendTextPaint = new SolidColorPaint(SKColors.White, 10);
-            PressureySeries.LegendTextPaint = new SolidColorPaint(SKColors.White, 10);
-            HumiditySeries.LegendTextPaint = new SolidColorPaint(SKColors.White, 10);
+            _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
 
-            System.Diagnostics.Debug.WriteLine("ChartPage baþlatýldý - ViewModel baðlantýsý bekleniyor");
+            ConfigureChartPerformance();
+            LogDebug("ChartPage baþlatýldý");
+        }
+
+        private void ConfigureChartPerformance()
+        {
+            try
+            {
+                var legendPaint = new SolidColorPaint(SKColors.White, 10);
+
+                // Tüm chart'lara performans ayarlarý
+                AltitudeSeries.LegendTextPaint = legendPaint;
+                SpeedSeries.LegendTextPaint = legendPaint;
+                AccelSeries.LegendTextPaint = legendPaint;
+                TempSeries.LegendTextPaint = legendPaint;
+                PressureySeries.LegendTextPaint = legendPaint;
+                HumiditySeries.LegendTextPaint = legendPaint;
+
+                // Animation hýzlandýr
+                AltitudeSeries.AnimationsSpeed = TimeSpan.FromMilliseconds(100);
+                SpeedSeries.AnimationsSpeed = TimeSpan.FromMilliseconds(100);
+                AccelSeries.AnimationsSpeed = TimeSpan.FromMilliseconds(100);
+                TempSeries.AnimationsSpeed = TimeSpan.FromMilliseconds(100);
+                PressureySeries.AnimationsSpeed = TimeSpan.FromMilliseconds(100);
+                HumiditySeries.AnimationsSpeed = TimeSpan.FromMilliseconds(100);
+
+                LogDebug("Chart performans ayarlarý uygulandý");
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Chart performans ayarlarý hatasý: {ex.Message}");
+            }
         }
 
         private void ConnectToSerialPortService()
         {
             try
             {
-                // SettingPage'den SerialPortService instance'ýný al
-                _serialPortService = SettingPage.GetInputSerialPortService();
-                
-                if (_serialPortService != null)
+                _serialPortService = SerialPortManager.Instance.SerialPortService;
+
+                if (_serialPortService?.ViewModel != null)
                 {
-                    // ViewModel'i SerialPortService'den al
                     _viewModel = _serialPortService.ViewModel;
-                    
-                    if (_viewModel != null)
-                    {
-                        this.DataContext = _viewModel;
-                        System.Diagnostics.Debug.WriteLine("ChartPage ViewModel'e baðlandý");
-                    }
-                    else
-                    {
-                        // Yeni ViewModel oluþtur
-                        _viewModel = new ChartViewModel();
-                        this.DataContext = _viewModel;
-                        _serialPortService.ViewModel = _viewModel;
-                        System.Diagnostics.Debug.WriteLine("ChartPage yeni ViewModel oluþturdu");
-                    }
+                    LogDebug("ChartPage mevcut ViewModel'e baðlandý");
                 }
                 else
                 {
-                    // SerialPortService yoksa kendi ViewModel'imizi oluþtur
                     _viewModel = new ChartViewModel();
-                    this.DataContext = _viewModel;
-                    System.Diagnostics.Debug.WriteLine("ChartPage: SerialPortService bulunamadý, baðýmsýz ViewModel oluþturuldu");
+                    if (_serialPortService != null)
+                        _serialPortService.ViewModel = _viewModel;
+                    LogDebug("ChartPage yeni ViewModel oluþturdu");
                 }
+
+                _dispatcherQueue.TryEnqueue(() =>
+                {
+                    this.DataContext = _viewModel;
+                    LogDebug("ChartPage DataContext ayarlandý");
+                });
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"ChartPage ViewModel baðlantý hatasý: {ex.Message}");
-                
-                // Hata durumunda varsayýlan ViewModel oluþtur
+                LogDebug($"ViewModel baðlantý hatasý: {ex.Message}");
                 _viewModel = new ChartViewModel();
-                this.DataContext = _viewModel;
+                _dispatcherQueue.TryEnqueue(() =>
+                {
+                    this.DataContext = _viewModel;
+                });
             }
         }
 
         protected override void OnNavigatedTo(NavigationEventArgs e)
         {
             base.OnNavigatedTo(e);
-            
-            // SerialPortService'e baðlan ve ViewModel'i al
+
+            SerialPortManager.Instance.SubscribeToTelemetryData("ChartPage", OnTelemetryDataReceived);
             ConnectToSerialPortService();
-            
-            System.Diagnostics.Debug.WriteLine("ChartPage navigasyon tamamlandý");
+
+            LogDebug("ChartPage navigasyon tamamlandý");
         }
 
         protected override void OnNavigatedFrom(NavigationEventArgs e)
         {
             base.OnNavigatedFrom(e);
-            System.Diagnostics.Debug.WriteLine("ChartPage'den ayrýldý");
+            SerialPortManager.Instance.UnsubscribeAll("ChartPage");
+            LogDebug("ChartPage'den ayrýldý");
+        }
+
+        private void OnTelemetryDataReceived(SerialPortService.RocketTelemetryData data)
+        {
+            _dispatcherQueue.TryEnqueue(() =>
+            {
+                try
+                {
+                    if (_viewModel != null && data != null)
+                    {
+                        // Batch update için yeni metod kullan
+                        _viewModel.BatchUpdateChartData(data);
+                        LogDebugChart(data.RocketAltitude);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogDebug($"Chart güncellemesi hatasý: {ex.Message}");
+                }
+            });
+        }
+
+        [Conditional("DEBUG")]
+        private static void LogDebug(string message)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ChartPage] {message}");
+        }
+
+        [Conditional("DEBUG")]
+        private static void LogDebugChart(float altitude)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ChartPage] Chart güncellendi - Ýrtifa: {altitude:F1}m");
         }
     }
 }

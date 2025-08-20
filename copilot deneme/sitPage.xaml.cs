@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using System;
+using System.Diagnostics;
 using System.Globalization;
 using System.Threading.Tasks;
 
@@ -31,6 +32,13 @@ namespace copilot_deneme
         private double _currentPayloadLat = 39.925533;
         private double _currentPayloadLon = 32.866287;
 
+        // Performans optimizasyonu için 3D model güncelleme throttling
+        private float _lastYaw, _lastPitch, _lastRoll;
+        private float _pendingYaw, _pendingPitch, _pendingRoll;
+        private bool _hasNewRotationData = false;
+        private DateTime _lastRotationUpdate = DateTime.Now;
+        private readonly TimeSpan _rotationThrottleInterval = TimeSpan.FromMilliseconds(33); // ~30 FPS
+
         public sitPage()
         {
             this.InitializeComponent();
@@ -41,7 +49,7 @@ namespace copilot_deneme
             InitializeThreeDWebView();
             InitializeGpsMap();
             
-            System.Diagnostics.Debug.WriteLine("sitPage başlatıldı - SerialPortService bağlantısı bekleniyor");
+            LogDebug("sitPage başlatıldı - SerialPortService bağlantısı bekleniyor");
         }
 
         private async void InitializeThreeDWebView()
@@ -53,29 +61,40 @@ namespace copilot_deneme
                 ThreeDWebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
                     "assets.local", assetPath, Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind.Allow);
                 ThreeDWebView.NavigateToString(HtmlTemplate);
-                System.Diagnostics.Debug.WriteLine("3D WebView başarıyla başlatıldı");
+                LogDebug("3D WebView başarıyla başlatıldı");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"3D WebView başlatma hatası: {ex.Message}");
+                LogDebug($"3D WebView başlatma hatası: {ex.Message}");
             }
         }
 
         private void OnRotationDataReceived(float yaw, float pitch, float roll)
         {
-            // Gelen verinin UI thread'inde işlendiğinden emin ol
-            _dispatcherQueue.TryEnqueue(async () =>
+            // Yeni veriyi pending olarak sakla
+            _pendingYaw = yaw;
+            _pendingPitch = pitch;
+            _pendingRoll = roll;
+            _hasNewRotationData = true;
+
+            // Throttling: Son güncellemeden beri yeterli zaman geçtiyse güncelle
+            var now = DateTime.Now;
+            if (now - _lastRotationUpdate >= _rotationThrottleInterval)
             {
-                try
+                // Değerler gerçekten değiştiyse güncelle
+                if (_pendingYaw != _lastYaw || _pendingPitch != _lastPitch || _pendingRoll != _lastRoll)
                 {
-                    // 3D modeli güncellemek için mevcut metodunuzu çağırın
-                    await UpdateRotationAsync(yaw, pitch, roll);
+                    _lastYaw = _pendingYaw;
+                    _lastPitch = _pendingPitch;
+                    _lastRoll = _pendingRoll;
+                    _lastRotationUpdate = now;
+
+                    // Asenkron olarak 3D modeli güncelle
+                    _ = UpdateRotationAsync(_lastYaw, _lastPitch, _lastRoll);
                 }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"Rotation güncelleme hatası: {ex.Message}");
-                }
-            });
+                _hasNewRotationData = false;
+            }
+            // Eğer throttle süresi dolmadıysa, veri sadece pending olarak saklanır
         }
 
         // Telemetri verisi geldikçe bu metodu çağırın:
@@ -87,14 +106,14 @@ namespace copilot_deneme
                     return;
 
                 // JS fonksiyonunu çağır
-                string script = $"updateModelRotation({yaw.ToString(CultureInfo.InvariantCulture)}, " +
-                                               $"{pitch.ToString(CultureInfo.InvariantCulture)}, " +
-                                               $"{roll.ToString(CultureInfo.InvariantCulture)});";
+                var script = $"updateModelRotation({yaw.ToString(CultureInfo.InvariantCulture)},{pitch.ToString(CultureInfo.InvariantCulture)},{roll.ToString(CultureInfo.InvariantCulture)});";
                 await ThreeDWebView.ExecuteScriptAsync(script);
+                
+                LogDebug($"3D model güncellendi - Yaw: {yaw:F2}, Pitch: {pitch:F2}, Roll: {roll:F2}");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"3D model rotation güncelleme hatası: {ex.Message}");
+                LogDebug($"3D model rotation güncelleme hatası: {ex.Message}");
             }
         }
 
@@ -106,14 +125,13 @@ namespace copilot_deneme
                 string mapHtml = CreateSitPageMapHtml();
                 MapWebView.NavigateToString(mapHtml);
                 _isMapInitialized = true;
-                System.Diagnostics.Debug.WriteLine("sitPage GPS harita başarıyla başlatıldı");
+                LogDebug("sitPage GPS harita başarıyla başlatıldı");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"sitPage GPS harita başlatma hatası: {ex.Message}");
+                LogDebug($"sitPage GPS harita başlatma hatası: {ex.Message}");
             }
         }
-
         private string CreateSitPageMapHtml()
         {
             return $@"
@@ -378,7 +396,7 @@ namespace copilot_deneme
 </html>";
         }
 
-        private async void UpdateSitPageGpsPositions(double rocketLat, double rocketLon, double rocketAlt, double payloadLat, double payloadLon, double payloadAlt)
+        private async void UpdateRocketGpsPosition(double rocketLat, double rocketLon, double rocketAlt)
         {
             if (!_isMapInitialized) return;
             
@@ -389,28 +407,42 @@ namespace copilot_deneme
                 {
                     _currentRocketLat = rocketLat;
                     _currentRocketLon = rocketLon;
+                    
+                    // JavaScript fonksiyonunu çağır - string interpolation optimize edildi
+                    var script = $"updateRocketPosition({_currentRocketLat.ToString(CultureInfo.InvariantCulture)},{_currentRocketLon.ToString(CultureInfo.InvariantCulture)},{rocketAlt.ToString(CultureInfo.InvariantCulture)})";
+                    
+                    await MapWebView.ExecuteScriptAsync(script);
+                    LogDebugGpsRocket(_currentRocketLat, _currentRocketLon, rocketAlt);
                 }
-                
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"sitPage GPS pozisyon güncelleme hatası: {ex.Message}");
+            }
+        }
+
+        private async void UpdatePayloadGpsPosition(double payloadLat, double payloadLon, double payloadAlt)
+        {
+            if (!_isMapInitialized) return;
+
+            try
+            {
+                // Sadece geçerli koordinatları güncelle
                 if (payloadLat != 0 && payloadLon != 0)
                 {
                     _currentPayloadLat = payloadLat;
                     _currentPayloadLon = payloadLon;
+
+                    // JavaScript fonksiyonunu çağır
+                    var script = $"updatePayloadPosition({_currentPayloadLat.ToString(CultureInfo.InvariantCulture)},{_currentPayloadLon.ToString(CultureInfo.InvariantCulture)},{payloadAlt.ToString(CultureInfo.InvariantCulture)})";
+
+                    await MapWebView.ExecuteScriptAsync(script);
+                    LogDebugGpsPayload(_currentPayloadLat, _currentPayloadLon, payloadAlt);
                 }
-                
-                // JavaScript fonksiyonunu çağır - irtifa bilgisi ile birlikte
-                string script = $"updateBothPositions({_currentRocketLat.ToString(CultureInfo.InvariantCulture)}, " +
-                               $"{_currentRocketLon.ToString(CultureInfo.InvariantCulture)}, " +
-                               $"{rocketAlt.ToString(CultureInfo.InvariantCulture)}, " +
-                               $"{_currentPayloadLat.ToString(CultureInfo.InvariantCulture)}, " +
-                               $"{_currentPayloadLon.ToString(CultureInfo.InvariantCulture)}, " +
-                               $"{payloadAlt.ToString(CultureInfo.InvariantCulture)})";
-                
-                await MapWebView.ExecuteScriptAsync(script);
-                System.Diagnostics.Debug.WriteLine($"sitPage GPS pozisyonları güncellendi - Roket: {_currentRocketLat:F6}, {_currentRocketLon:F6} ({rocketAlt:F1}m) | Payload: {_currentPayloadLat:F6}, {_currentPayloadLon:F6} ({payloadAlt:F1}m)");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"sitPage GPS pozisyon güncelleme hatası: {ex.Message}");
+                LogDebug($"sitPage Payload GPS pozisyon güncelleme hatası: {ex.Message}");
             }
         }
 
@@ -515,14 +547,14 @@ namespace copilot_deneme
 
         private void OnSerialDataReceived(string data)
         {
-            // Bu sadece bağlantı durumunu göstermek için
+            // Bu sadece bağlantı durumunu göstermek için - optimize edildi
             _dispatcherQueue.TryEnqueue(() =>
             {
                 LastUpdateText.Text = $"Veri alıyor: {DateTime.Now:HH:mm:ss}";
             });
         }
 
-        private void OnTelemetryDataUpdated(SerialPortService.RocketTelemetryData rocketData, SerialPortService.PayloadTelemetryData payloadData)
+        private void OnTelemetryDataUpdated(SerialPortService.RocketTelemetryData rocketData)
         {
             _dispatcherQueue.TryEnqueue(() =>
             {
@@ -531,50 +563,17 @@ namespace copilot_deneme
                     // Roket verileri - null kontrolü ile
                     if (rocketData != null)
                     {
-                        RocketAltitudeText.Text = $"{rocketData.RocketAltitude:F1} m";
-                        RocketGpsAltitudeText.Text = $"{rocketData.RocketGpsAltitude:F1} m";
-                        RocketLatitudeText.Text = $"{rocketData.RocketLatitude:F6}";
-                        RocketLongitudeText.Text = $"{rocketData.RocketLongitude:F6}";
-                        RocketSpeedText.Text = $"{rocketData.RocketSpeed:F2} m/s";
-                        RocketTemperatureText.Text = $"{rocketData.RocketTemperature:F1} °C";
-                        RocketPressureText.Text = $"{rocketData.RocketPressure:F1} hPa";
+                        // UI güncellemelerini batch olarak yap - performance artışı
+                        BatchUpdateUI(rocketData);
 
-                        // Jiroskop verileri
-                        GyroXText.Text = $"{rocketData.GyroX:F2} °/s";
-                        GyroYText.Text = $"{rocketData.GyroY:F2} °/s";
-                        GyroZText.Text = $"{rocketData.GyroZ:F2} °/s";
-
-                        // İvme verileri
-                        AccelXText.Text = $"{rocketData.AccelX:F2} m/s²";
-                        AccelYText.Text = $"{rocketData.AccelY:F2} m/s²";
-                        AccelZText.Text = $"{rocketData.AccelZ:F2} m/s²";
-                        AngleText.Text = $"{rocketData.Angle:F2}°";
-                    }
-                    
-                    // Payload verileri
-                    if (payloadData != null)
-                    {
-                        PayloadAltitudeText.Text = $"{payloadData.PayloadAltitude:F1} m";
-                        PayloadGPSAltitudeText.Text = $"{payloadData.PayloadGpsAltitude:F1} m";
-                        PayloadLatitudeText.Text = $"{payloadData.PayloadLatitude:F6}";
-                        PayloadLongitudeText.Text = $"{payloadData.PayloadLongitude:F6}";
-                        PayloadSpeedText.Text = $"{payloadData.PayloadSpeed:F2} m/s";
-                        PayloadTemperatureText.Text = $"{payloadData.PayloadTemperature:F1} °C";
-                        PayloadPressureText.Text = $"{payloadData.PayloadPressure:F1} hPa";
-                        PayloadHumidityText.Text = $"{payloadData.PayloadHumidity:F1} %";
-                    }
-
-                    // GPS haritasını güncelle - gerçek koordinatlar ve irtifa bilgisi ile
-                    if (rocketData != null && payloadData != null)
-                    {
-                        UpdateSitPageGpsPositions(rocketData.RocketLatitude, rocketData.RocketLongitude, rocketData.RocketAltitude,
-                                                payloadData.PayloadLatitude, payloadData.PayloadLongitude, payloadData.PayloadAltitude);
+                        // GPS haritasını güncelle
+                        UpdateRocketGpsPosition(rocketData.RocketLatitude, rocketData.RocketLongitude, rocketData.RocketAltitude);
 
                         // Chart'lara veri gönder
-                        SendDataToCharts(rocketData, payloadData);
+                        SendDataToCharts(rocketData);
 
                         // İstatistikleri güncelle
-                        UpdateStatistics(rocketData, payloadData);
+                        UpdateStatistics(rocketData);
                     }
 
                     // Son güncelleme zamanı
@@ -583,84 +582,83 @@ namespace copilot_deneme
                     _Counter = (_Counter + 1) % 256;
                     DataCountText.Text = _Counter.ToString();
 
-                    System.Diagnostics.Debug.WriteLine($"sitPage telemetri ve GPS güncellendi - Roket İrtifa: {rocketData?.RocketAltitude:F1}m, Payload İrtifa: {payloadData?.PayloadAltitude:F1}m");
+                    LogDebugTelemetry(rocketData?.RocketAltitude ?? 0);
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"sitPage telemetri güncelleme hatası: {ex.Message}");
+                    LogDebug($"sitPage telemetri güncelleme hatası: {ex.Message}");
                     LastUpdateText.Text = $"Hata: {DateTime.Now:HH:mm:ss}";
                 }
             });
         }
+        
+        // UI güncellemelerini batch'le - performans artışı
+        private void BatchUpdateUI(SerialPortService.RocketTelemetryData rocketData)
+        {
+            // Tüm UI güncellemelerini tek seferde yap
+            RocketAltitudeText.Text = $"{rocketData.RocketAltitude:F1} m";
+            RocketGpsAltitudeText.Text = $"{rocketData.RocketGpsAltitude:F1} m";
+            RocketLatitudeText.Text = $"{rocketData.RocketLatitude:F6}";
+            RocketLongitudeText.Text = $"{rocketData.RocketLongitude:F6}";
+            RocketSpeedText.Text = $"{rocketData.RocketSpeed:F2} m/s";
+            RocketTemperatureText.Text = $"{rocketData.RocketTemperature:F1} °C";
+            RocketPressureText.Text = $"{rocketData.RocketPressure:F2} hPa";
+            RocketPressureDerivativeText.Text = $"{rocketData.DpDt:F1} dP/dt";
 
-        private void SendDataToCharts(SerialPortService.RocketTelemetryData rocketData, SerialPortService.PayloadTelemetryData payloadData)
+            // Jiroskop verileri
+            GyroXText.Text = $"{rocketData.GyroX:F2} °/s";
+            GyroYText.Text = $"{rocketData.GyroY:F2} °/s";
+            GyroZText.Text = $"{rocketData.GyroZ:F2} °/s";
+
+            // İvme verileri
+            AccelXText.Text = $"{rocketData.AccelX:F2} m/s²";
+            AccelYText.Text = $"{rocketData.AccelY:F2} m/s²";
+            AccelZText.Text = $"{rocketData.AccelZ:F2} m/s²";
+            AngleText.Text = $"{rocketData.Angle:F2}°";
+        }
+
+        private void SendDataToCharts(SerialPortService.RocketTelemetryData rocketData)
         {
             try
             {
-                // ViewModel varsa ve GERÇEKTENç VERİ VARSA güncelle
-                if (_viewModel != null)
+                // ViewModel varsa ve GERÇEKTEN VERİ VARSA güncelle
+                if (_viewModel != null && rocketData != null)
                 {
-                    // SADECE ROKET VERİSİ VAR VE GERÇEKSİ
-                    if (rocketData != null)
-                    {
-                        _viewModel.AddRocketAltitudeValue(rocketData.RocketAltitude);
-                        _viewModel.addRocketAccelXValue(rocketData.AccelX);
-                        _viewModel.addRocketAccelYValue(rocketData.AccelY);
-                        _viewModel.addRocketAccelZValue(rocketData.AccelZ);
-                        _viewModel.addRocketSpeedValue(rocketData.RocketSpeed);
-                        _viewModel.addRocketTempValue(rocketData.RocketTemperature);
-                        _viewModel.addRocketPressureValue(rocketData.RocketPressure);
-                    }
+                    // Chart güncellemelerini optimize et
+                    _viewModel.AddRocketAltitudeValue(rocketData.RocketAltitude);
+                    _viewModel.addRocketAccelXValue(rocketData.AccelX);
+                    _viewModel.addRocketAccelYValue(rocketData.AccelY);
+                    _viewModel.addRocketAccelZValue(rocketData.AccelZ);
+                    _viewModel.addRocketSpeedValue(rocketData.RocketSpeed);
+                    _viewModel.addRocketTempValue(rocketData.RocketTemperature);
+                    _viewModel.addRocketPressureValue(rocketData.RocketPressure);
                     
-                    // SADECE PAYLOAD VERİSİ VARSA VE GERÇEKSİ (dummy değilse)
-                    if (payloadData != null && payloadData.PacketCounter > 0) // Gerçek payload verisi kontrolü
-                    {
-                        _viewModel.addPayloadAltitudeValue(payloadData.PayloadAltitude);
-                        _viewModel.addPayloadSpeedValue(payloadData.PayloadSpeed);
-                        _viewModel.addPayloadTempValue(payloadData.PayloadTemperature);
-                        _viewModel.addPayloadPressureValue(payloadData.PayloadPressure);
-                        _viewModel.addPayloadHumidityValue(payloadData.PayloadHumidity);
-                        
-                        System.Diagnostics.Debug.WriteLine("sitPage: GERÇEİ PAYLOAD VERİSİ chart'a eklendi");
-                    }
-                    else
-                    {
-                        System.Diagnostics.Debug.WriteLine("sitPage: Payload dummy verisi - chart'a eklenmedi");
-                    }
-                    
-                    System.Diagnostics.Debug.WriteLine("sitPage chart verileri ViewModel'e gönderildi");
+                    LogDebug("sitPage chart verileri ViewModel'e gönderildi");
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"sitPage chart güncelleme hatası: {ex.Message}");
+                LogDebug($"sitPage chart güncelleme hatası: {ex.Message}");
             }
         }
 
-        private void UpdateStatistics(SerialPortService.RocketTelemetryData rocketData, SerialPortService.PayloadTelemetryData payloadData)
+        private void UpdateStatistics(SerialPortService.RocketTelemetryData rocketData)
         {
             try
             {
                 // Maksimum irtifa hesapla
                 float rocketAlt = rocketData?.RocketAltitude ?? 0;
-                float payloadAlt = payloadData?.PayloadAltitude ?? 0;
-                float currentMaxAltitude = Math.Max(rocketAlt, payloadAlt);
                 
-                if (currentMaxAltitude > _maxAltitude)
+                if (rocketAlt > _maxAltitude)
                 {
-                    _maxAltitude = currentMaxAltitude;
+                    _maxAltitude = rocketAlt;
                     MaxAltitudeText.Text = $"{_maxAltitude:F1} m";
                 }
 
-                // CRC değerini güncelle - önce roket sonra payload
+                // CRC değerini güncelle
                 if (rocketData?.CRC >= 0) 
                 {
                     _CRC = rocketData.CRC;
-                    CRCText.Text = _CRC.ToString();
-                }
-                else if (payloadData?.CRC >= 0)
-                {
-                    _CRC = payloadData.CRC;
                     CRCText.Text = _CRC.ToString();
                 }
 
@@ -673,7 +671,7 @@ namespace copilot_deneme
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"İstatistik güncelleme hatası: {ex.Message}");
+                LogDebug($"İstatistik güncelleme hatası: {ex.Message}");
             }
         }
 
@@ -681,29 +679,24 @@ namespace copilot_deneme
         {
             try
             {
-                // SettingPage'den SerialPortService instance'ını al
-                _serialPortService = SettingPage.GetInputSerialPortService();
+                // SerialPortManager'dan SerialPortService instance'ını al
+                _serialPortService = SerialPortManager.Instance.SerialPortService;
                 
                 if (_serialPortService != null)
                 {
-                    // Event handler'ları bağla
-                    _serialPortService.OnTelemetryDataUpdated += OnTelemetryDataUpdated;
-                    _serialPortService.OnDataReceived += OnSerialDataReceived;
-                    _serialPortService.OnRotationDataReceived += OnRotationDataReceived;
-                    
                     // ViewModel'i al
                     _viewModel = _serialPortService.ViewModel ?? new ChartViewModel();
                     
-                    System.Diagnostics.Debug.WriteLine("sitPage SerialPortService'e bağlandı");
+                    LogDebug("sitPage SerialPortManager'a bağlandı");
                 }
                 else
                 {
-                    System.Diagnostics.Debug.WriteLine("sitPage: SerialPortService instance bulunamadı!");
+                    LogDebug("sitPage: SerialPortService instance bulunamadı!");
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"sitPage SerialPortService bağlantı hatası: {ex.Message}");
+                LogDebug($"sitPage SerialPortManager bağlantı hatası: {ex.Message}");
             }
         }
 
@@ -711,25 +704,73 @@ namespace copilot_deneme
         {
             base.OnNavigatedTo(e);
             
+            // SerialPortManager'a abone ol
+            SerialPortManager.Instance.SubscribeToTelemetryData("sitPage", OnTelemetryDataUpdated);
+            SerialPortManager.Instance.SubscribeToDataReceived("sitPage", OnSerialDataReceived);
+            SerialPortManager.Instance.SubscribeToRotationData("sitPage", OnRotationDataReceived);
+            
+            // Payload verisi için abone ol
+            SerialPortManager.Instance.SubscribeToPayloadData("sitPage", HandlePayloadData);
+            
             // SerialPortService'e bağlan
             ConnectToSerialPortService();
             
-            System.Diagnostics.Debug.WriteLine("sitPage navigasyon tamamlandı - GPS harita sistemi hazır");
+            LogDebug("sitPage navigasyon tamamlandı - GPS harita sistemi hazır");
+        }
+
+        private void HandlePayloadData(SerialPortService.PayloadTelemetryData data)
+        {
+            // UI thread'inde olduğumuzdan emin olalım
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                // Textbox'ları güncelle
+                PayloadAltitudeText.Text = data.Altitude.ToString("F2");
+                PayloadGPSAltitudeText.Text = data.GpsAltitude.ToString("F2");
+                PayloadLatitudeText.Text = data.Latitude.ToString("F6");
+                PayloadLongitudeText.Text = data.Longitude.ToString("F6");
+                PayloadTemperatureText.Text = data.Temperature.ToString("F2");
+                PayloadHumidityText.Text = data.Humidity.ToString("F2");
+                PayloadPressureText.Text = data.Pressure.ToString("F2");
+                PayloadSpeedText.Text = data.PayloadSpeed.ToString("F2");
+
+                // Harita kontrolünü güncelle
+                UpdatePayloadGpsPosition(data.Latitude, data.Longitude, data.Altitude);
+            });
         }
 
         protected override void OnNavigatedFrom(NavigationEventArgs e)
         {
             base.OnNavigatedFrom(e);
             
-            // Event handler'ları kaldır
-            if (_serialPortService != null)
-            {
-                _serialPortService.OnTelemetryDataUpdated -= OnTelemetryDataUpdated;
-                _serialPortService.OnDataReceived -= OnSerialDataReceived;
-                _serialPortService.OnRotationDataReceived -= OnRotationDataReceived;
-            }
+            // SerialPortManager'dan aboneliği iptal et
+            SerialPortManager.Instance.UnsubscribeAll("sitPage");
             
-            System.Diagnostics.Debug.WriteLine("sitPage'den ayrıldı - Event handler'lar kaldırıldı");
+            LogDebug("sitPage'den ayrıldı - Abonelikler iptal edildi");
+        }
+        
+        // Performance Optimized Debug Methods - sadece DEBUG modunda çalışır
+        [Conditional("DEBUG")]
+        private static void LogDebug(string message)
+        {
+            System.Diagnostics.Debug.WriteLine(message);
+        }
+        
+        [Conditional("DEBUG")]
+        private static void LogDebugTelemetry(float altitude)
+        {
+            System.Diagnostics.Debug.WriteLine($"sitPage telemetri ve GPS güncellendi - Roket İrtifa: {altitude:F1}m");
+        }
+        
+        [Conditional("DEBUG")]
+        private static void LogDebugGpsRocket(double lat, double lon, double alt)
+        {
+            System.Diagnostics.Debug.WriteLine($"sitPage GPS pozisyonu güncellendi - Roket: {lat:F6}, {lon:F6} ({alt:F1}m)");
+        }
+
+        [Conditional("DEBUG")]
+        private static void LogDebugGpsPayload(double lat, double lon, double alt)
+        {
+            System.Diagnostics.Debug.WriteLine($"sitPage GPS pozisyonu güncellendi - Payload: {lat:F6}, {lon:F6} ({alt:F1}m)");
         }
     }
 }

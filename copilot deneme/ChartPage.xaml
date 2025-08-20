@@ -111,8 +111,10 @@
                     
                     <lvc:CartesianChart Grid.Row="1"
                                         x:Name="AltitudeSeries"
-                                        Series="{x:Bind ViewModel.AltitudeSeries, Mode=OneWay}"
+                                        Series="{Binding AltitudeSeries, Mode=OneWay}"
                                         LegendPosition="Bottom"
+                                        AnimationsSpeed="00:00:00.1"
+                                        TooltipPosition="Hidden"
                                         Margin="8"/>
                 </Grid>
             </Border>
@@ -138,8 +140,10 @@
                     
                     <lvc:CartesianChart Grid.Row="1"
                                         x:Name="AccelSeries"
-                                        Series="{x:Bind ViewModel.AccelerationSeries, Mode=OneWay}"
+                                        Series="{Binding AccelerationSeries, Mode=OneWay}"
                                         LegendPosition="Bottom"
+                                        AnimationsSpeed="00:00:00.1"
+                                        TooltipPosition="Hidden"
                                         Margin="8"/>
                 </Grid>
             </Border>
@@ -165,8 +169,10 @@
                     
                     <lvc:CartesianChart Grid.Row="1"
                                         x:Name="SpeedSeries"
-                                        Series="{x:Bind ViewModel.SpeedSeries, Mode=OneWay}"
+                                        Series="{Binding SpeedSeries, Mode=OneWay}"
                                         LegendPosition="Bottom"
+                                        AnimationsSpeed="00:00:00.1"
+                                        TooltipPosition="Hidden"
                                         Margin="8"/>
                 </Grid>
             </Border>
@@ -192,8 +198,10 @@
                     
                     <lvc:CartesianChart Grid.Row="1"
                                         x:Name="TempSeries"
-                                        Series="{x:Bind ViewModel.TemperatureSeries, Mode=OneWay}"
+                                        Series="{Binding TemperatureSeries, Mode=OneWay}"
                                         LegendPosition="Bottom"
+                                        AnimationsSpeed="00:00:00.1"
+                                        TooltipPosition="Hidden"
                                         Margin="8"/>
                 </Grid>
             </Border>
@@ -219,8 +227,10 @@
                     
                     <lvc:CartesianChart Grid.Row="1"
                                         x:Name="PressureySeries"
-                                        Series="{x:Bind ViewModel.PressureSeries, Mode=OneWay}"
+                                        Series="{Binding PressureSeries, Mode=OneWay}"
                                         LegendPosition="Bottom"
+                                        AnimationsSpeed="00:00:00.1"
+                                        TooltipPosition="Hidden"
                                         Margin="8"/>
                 </Grid>
             </Border>
@@ -246,8 +256,10 @@
                     
                     <lvc:CartesianChart Grid.Row="1"
                                         x:Name="HumiditySeries"
-                                        Series="{x:Bind ViewModel.HumiditySeries, Mode=OneWay}"
+                                        Series="{Binding HumiditySeries, Mode=OneWay}"
                                         LegendPosition="Bottom"
+                                        AnimationsSpeed="00:00:00.1"
+                                        TooltipPosition="Hidden"
                                         Margin="8"/>
                 </Grid>
             </Border>
