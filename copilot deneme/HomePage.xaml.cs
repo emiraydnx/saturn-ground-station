@@ -3,47 +3,48 @@ using Microsoft.UI.Dispatching;
 using System;
 using copilot_deneme.ViewModels;
 using Microsoft.UI.Xaml.Navigation;
+using System.Collections.ObjectModel;
+using System.Diagnostics;
 
 namespace copilot_deneme
 {
     public sealed partial class HomePage : Page
     {
-        private readonly ChartViewModel _viewModel;
         private readonly DispatcherQueue _dispatcherQueue;
         private SerialPortService? _serialPortService;
+
+        // Performans için ObservableCollection ve ListView kullanýlýyor
+        public ObservableCollection<string> LogEntries { get; } = new ObservableCollection<string>();
+        private const int MaxLogEntries = 500; // Bellek kullanýmýný kontrol altýnda tutmak için sýnýr
 
         public HomePage()
         {
             this.InitializeComponent();
             _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
-            _viewModel = new ChartViewModel();
-            this.DataContext = _viewModel;
+            this.DataContext = this; // DataContext'i sayfanýn kendisine ayarlayarak LogEntries'e binding yapmayý saðlýyoruz
 
-            System.Diagnostics.Debug.WriteLine("HomePage baþlatýldý - SerialPortService baðlantýsý bekleniyor");
+            Debug.WriteLine("HomePage baþlatýldý - SerialPortService baðlantýsý bekleniyor");
         }
 
         private void ConnectToSerialPortService()
         {
             try
             {
-                // SettingPage'den SerialPortService instance'ýný al
-                _serialPortService = SettingPage.GetInputSerialPortService();
+                // SerialPortManager'dan SerialPortService instance'ýný al
+                _serialPortService = SerialPortManager.Instance.SerialPortService;
                 
                 if (_serialPortService != null)
                 {
-                    // Event handler'ý baðla
-                    _serialPortService.OnDataReceived += OnSerialDataReceived;
-                    
-                    System.Diagnostics.Debug.WriteLine("HomePage SerialPortService'e baðlandý");
+                    Debug.WriteLine("HomePage SerialPortManager'a baðlandý");
                 }
                 else
                 {
-                    System.Diagnostics.Debug.WriteLine("HomePage: SerialPortService instance bulunamadý!");
+                    Debug.WriteLine("HomePage: SerialPortService instance bulunamadý!");
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"HomePage SerialPortService baðlantý hatasý: {ex.Message}");
+                Debug.WriteLine($"HomePage SerialPortManager baðlantý hatasý: {ex.Message}");
             }
         }
 
@@ -53,20 +54,27 @@ namespace copilot_deneme
             {
                 try
                 {
-                    // Gelen veriyi TextBox'a ekle - sadece ham veri gösterimi
-                    SerialDataTextBox.Text += $"{DateTime.Now:HH:mm:ss}: {data}\n";
+                    // Verimsiz string birleþtirme yerine koleksiyona ekle (O(1) operasyon)
+                    LogEntries.Add($"{DateTime.Now:HH:mm:ss}: {data}");
 
-                    // TextBox'ý en alta kaydýr
-                    SerialDataScrollViewer.ChangeView(null, SerialDataScrollViewer.ExtentHeight, null);
+                    // Koleksiyonun aþýrý büyümesini engelle
+                    if (LogEntries.Count > MaxLogEntries)
+                    {
+                        LogEntries.RemoveAt(0);
+                    }
+
+                    // Yeni eklenen öðeyi görünür kýl
+                    if (LogListView.Items.Count > 0)
+                    {
+                        LogListView.ScrollIntoView(LogListView.Items[LogEntries.Count - 1]);
+                    }
                     
                     // Status güncelle
                     StatusTextBlock.Text = $"Ham veri alýndý: {DateTime.Now:HH:mm:ss}";
-                    
-                    System.Diagnostics.Debug.WriteLine($"HomePage - Ham veri görüntülendi: {data.Length} karakter");
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"HomePage veri görüntüleme hatasý: {ex.Message}");
+                    Debug.WriteLine($"HomePage veri görüntüleme hatasý: {ex.Message}");
                     StatusTextBlock.Text = $"Veri hatasý: {DateTime.Now:HH:mm:ss}";
                 }
             });
@@ -77,13 +85,13 @@ namespace copilot_deneme
         {
             try
             {
-                SerialDataTextBox.Text = "";
+                LogEntries.Clear(); // Koleksiyonu temizle
                 StatusTextBlock.Text = "Veriler temizlendi";
-                System.Diagnostics.Debug.WriteLine("HomePage verileri temizlendi");
+                Debug.WriteLine("HomePage verileri temizlendi");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"HomePage veri temizleme hatasý: {ex.Message}");
+                Debug.WriteLine($"HomePage veri temizleme hatasý: {ex.Message}");
                 StatusTextBlock.Text = "Temizleme hatasý";
             }
         }
@@ -92,23 +100,23 @@ namespace copilot_deneme
         {
             base.OnNavigatedTo(e);
             
+            // SerialPortManager'a abone ol
+            SerialPortManager.Instance.SubscribeToDataReceived("HomePage", OnSerialDataReceived);
+            
             // SerialPortService'e baðlan
             ConnectToSerialPortService();
             
-            System.Diagnostics.Debug.WriteLine("HomePage navigasyon tamamlandý");
+            Debug.WriteLine("HomePage navigasyon tamamlandý");
         }
 
         protected override void OnNavigatedFrom(NavigationEventArgs e)
         {
             base.OnNavigatedFrom(e);
             
-            // Event handler'larý kaldýr
-            if (_serialPortService != null)
-            {
-                _serialPortService.OnDataReceived -= OnSerialDataReceived;
-            }
+            // SerialPortManager'dan aboneliði iptal et
+            SerialPortManager.Instance.UnsubscribeAll("HomePage");
             
-            System.Diagnostics.Debug.WriteLine("HomePage'den ayrýldý - Event handler'lar temizlendi");
+            Debug.WriteLine("HomePage'den ayrýldý - Abonelik iptal edildi");
         }
     }
 }

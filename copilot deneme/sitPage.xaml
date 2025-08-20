@@ -390,6 +390,15 @@
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
+                            <TextBlock Text="Basınç Türevi:" Style="{StaticResource DataLabelStyle}"/>
+                            <TextBlock x:Name="RocketPressureDerivativeText" Grid.Row="1" Text="0.0 dP/dt" Style="{StaticResource DataValueStyle}"/>
+                        </Grid>
+
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
                             <TextBlock Text="P.Basınç:" Style="{StaticResource DataLabelStyle}"/>
                             <TextBlock x:Name="PayloadPressureText" Grid.Row="1" Text="0.0 hPa" Style="{StaticResource DataValueStyle}"/>
                         </Grid>

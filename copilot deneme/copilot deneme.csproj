@@ -58,9 +58,6 @@
     <Resource Include="Assets\line-chart-128.png" />
   </ItemGroup>
   <ItemGroup>
-    <None Update="ArduinoPage.xaml">
-      <Generator>MSBuild:Compile</Generator>
-    </None>
     <None Update="SplashScreen.xaml">
       <Generator>MSBuild:Compile</Generator>
     </None>
@@ -77,11 +74,6 @@
     <Content Update="Assets\teamlogo.png">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
-  </ItemGroup>
-  <ItemGroup>
-    <Page Update="ArduinoPage.xaml">
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
   </ItemGroup>
   <ItemGroup>
     <Page Update="ChartPage.xaml">

@@ -82,25 +82,27 @@
                                Foreground="White"/>
                 </StackPanel>
 
-                <Border Grid.Row="1" 
-                        Background="#000000" 
-                        CornerRadius="8" 
-                        BorderBrush="#333333" 
-                        BorderThickness="1">
-                    <ScrollViewer x:Name="SerialDataScrollViewer" 
-                                  Margin="12">
-                        <TextBox x:Name="SerialDataTextBox"
-                                 AcceptsReturn="True"
-                                 TextWrapping="Wrap"
-                                 IsReadOnly="True"
-                                 Background="Transparent"
-                                 Foreground="{StaticResource SuccessBrush}"
-                                 FontFamily="Consolas"
-                                 FontSize="12"
-                                 BorderThickness="0"
-                                 MinHeight="300"/>
-                    </ScrollViewer>
-                </Border>
+                <ListView x:Name="LogListView"
+                          Grid.Row="1"
+                          ItemsSource="{Binding LogEntries}"
+                          SelectionMode="None"
+                          IsItemClickEnabled="False">
+                    <ListView.ItemContainerStyle>
+                        <Style TargetType="ListViewItem">
+                            <Setter Property="Padding" Value="5,2"/>
+                            <Setter Property="MinHeight" Value="10"/>
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                        </Style>
+                    </ListView.ItemContainerStyle>
+                    <ListView.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" 
+                                       FontFamily="Consolas" 
+                                       FontSize="12" 
+                                       TextWrapping="Wrap"/>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
 
                 <Button Grid.Row="2" 
                         Content="Temizle" 

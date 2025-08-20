@@ -14,12 +14,14 @@ namespace copilot_deneme
 
         #region Events
         event Action<string>? OnDataReceived;
-        event Action<SerialPortService.PayloadTelemetryData>? OnPayloadDataUpdated;
         event Action<SerialPortService.RocketTelemetryData>? OnRocketDataUpdated;
-        event Action<SerialPortService.HYITelemetryData>? OnHYIPacketReceived;
         event Action<float, float, float>? OnRotationDataReceived;
-        event Action<SerialPortService.RocketTelemetryData, SerialPortService.PayloadTelemetryData>? OnTelemetryDataUpdated;
+        event Action<SerialPortService.RocketTelemetryData>? OnTelemetryDataUpdated;
         event Action<string>? OnError;
+        
+        // Interface uyumluluðu için - kullanýlmýyor
+        event Action<SerialPortService.PayloadTelemetryData>? OnPayloadDataUpdated;
+        event Action<SerialPortService.HYITelemetryData>? OnHYIPacketReceived;
         #endregion
 
         #region Methods
