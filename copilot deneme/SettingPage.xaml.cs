@@ -4,13 +4,10 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
-using Microsoft.Extensions.Logging;
 using System;
 using System.Diagnostics;
-using System.Globalization;
 using System.IO.Ports;
 using System.Linq;
-using Windows.UI;
 
 namespace copilot_deneme
 {
@@ -18,10 +15,6 @@ namespace copilot_deneme
     {
         private readonly ChartViewModel _viewModel;
         private readonly DispatcherQueue _dispatcherQueue;
-        private readonly SerialPortService _serialPortService;
-        private readonly SerialPortService _outputPortService;
-        private SerialPort? _arduinoSerialPort; // Arduino için ayrı SerialPort
-        private bool _isArduinoConnected = false;
 
         public SettingPage()
         {
@@ -31,33 +24,6 @@ namespace copilot_deneme
             // ViewModel oluştur ve ayarla
             _viewModel = new ChartViewModel();
             this.DataContext = _viewModel;
-            
-            // SerialPortService instance'larını oluştur
-            _serialPortService = new SerialPortService();
-            _outputPortService = new SerialPortService();
-            
-            // ViewModel ve Dispatcher'ı ayarla
-            _serialPortService.ViewModel = _viewModel;
-            _serialPortService.Dispatcher = _dispatcherQueue;
-            _outputPortService.ViewModel = _viewModel;
-            _outputPortService.Dispatcher = _dispatcherQueue;
-
-            // Event handler'ları kaydet - TÜM EVENT'LERİ EKLE
-            try
-            {
-                _serialPortService.OnHYIPacketReceived += OnHYIPacketReceived;
-                _serialPortService.OnRocketDataUpdated += OnRocketDataUpdated;
-                _serialPortService.OnPayloadDataUpdated += OnPayloadDataUpdated;
-                _serialPortService.OnTelemetryDataUpdated += OnTelemetryDataUpdated;
-                _serialPortService.OnError += OnSerialPortError;
-                _outputPortService.OnError += OnOutputPortError;
-                
-                LogDebug("SettingPage: Tüm event handler'lar başarıyla kaydedildi");
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"SettingPage: Event handler kaydetme hatası: {ex.Message}");
-            }
             
             // İlk yüklemede portları doldur
             RefreshAvailablePorts();
@@ -80,81 +46,13 @@ namespace copilot_deneme
                 LogDebug($"BaudRate ComboBox ayarlama hatası: {ex.Message}");
             }
             
-            LogDebug("SettingPage başlatıldı - Instance-based SerialPortService kullanılıyor");
-        }
-
-        private void OnSerialPortError(string errorMessage)
-        {
-            _dispatcherQueue.TryEnqueue(() =>
-            {
-                StatusIndicator_Input.Fill = new SolidColorBrush(Colors.Red);
-                StatusText_Input.Text = $"Giriş Hatası: {errorMessage}";
-                LogDebug($"SettingPage Serial Port Hatası: {errorMessage}");
-            });
-        }
-
-        private void OnOutputPortError(string errorMessage)
-        {
-            _dispatcherQueue.TryEnqueue(() =>
-            {
-                StatusIndicator_Output.Fill = new SolidColorBrush(Colors.Red);
-                StatusText_Output.Text = $"Çıkış Hatası: {errorMessage}";
-                LogDebug($"SettingPage Output Port Hatası: {errorMessage}");
-            });
+            LogDebug("SettingPage başlatıldı - SerialPortManager kullanılıyor");
         }
 
         private void RefreshPorts_Click(object sender, RoutedEventArgs e)
         {
             RefreshAvailablePorts();
             LogDebug("Ports refreshed");
-        }
-        
-        private void OnHYIPacketReceived(SerialPortService.HYITelemetryData data)
-        {
-            // HYI verisi alındığında log
-            _dispatcherQueue.TryEnqueue(() =>
-            {
-                LogDebug($"SettingPage: HYI Data - Team: {data.TeamId}, Counter: {data.PacketCounter}");
-            });
-        }
-
-        private void OnRocketDataUpdated(SerialPortService.RocketTelemetryData data)
-        {
-            // Roket verisi alındığında log
-            _dispatcherQueue.TryEnqueue(() =>
-            {
-                LogDebug($"SettingPage: ROKET VERİSİ ALINDI! Paket #{data.PacketCounter}, İrtifa: {data.RocketAltitude:F1}m");
-                
-                // Status text'i güncelle
-                StatusText_Input.Text = $"ROKET #{data.PacketCounter} - İrtifa: {data.RocketAltitude:F1}m";
-            });
-        }
-
-        private void OnPayloadDataUpdated(SerialPortService.PayloadTelemetryData data)
-        {
-            // Payload verisi alındığında log
-            _dispatcherQueue.TryEnqueue(() =>
-            {
-                LogDebug($"SettingPage: Payload Data - Counter: {data.PacketCounter}, İrtifa: {data.Altitude:F1}m");
-            });
-        }
-
-        private void OnTelemetryDataUpdated(SerialPortService.RocketTelemetryData rocketData)
-        {
-            // Telemetri verisi alındığında log
-            _dispatcherQueue.TryEnqueue(() =>
-            {
-                try
-                {
-                    string rocketInfo = rocketData != null ? $"Roket: {rocketData.RocketAltitude:F1}m" : "Roket: null";
-                    
-                    LogDebug($"SettingPage: TELEMETRİ GÜNCELLEME - {rocketInfo}");
-                }
-                catch (Exception ex)
-                {
-                    LogDebug($"SettingPage: Telemetri güncelleme hatası: {ex.Message}");
-                }
-            });
         }
 
         private void RefreshAvailablePorts()
@@ -193,7 +91,19 @@ namespace copilot_deneme
                 var portName = PortComboBox_Input.SelectedItem as string;
                 if (string.IsNullOrEmpty(portName)) 
                     throw new InvalidOperationException("Giriş için bir port seçin.");
-                
+
+                // Output port ile aynı port'u seçmeye çalışıyorsa uyar
+                var outputPortName = PortComboBox_Output.SelectedItem as string;
+                if (!string.IsNullOrEmpty(outputPortName) &&
+                    portName == outputPortName &&
+                    SerialPortManager.Instance.IsOutputConnected)
+                {
+                    StatusIndicator_Input.Fill = new SolidColorBrush(Colors.Orange);
+                    StatusText_Input.Text = "Input port, Output port ile aynı olamaz. Farklı bir port seçin.";
+                    LogDebug($"Port çakışması: Input ve Output için aynı port seçildi: {portName}");
+                    return;
+                }
+
                 // BaudRate ComboBox'tan güvenli değer alma
                 string baudRateStr = "115200"; // Default
                 try
@@ -251,6 +161,19 @@ namespace copilot_deneme
                 if (string.IsNullOrEmpty(portName))
                     throw new InvalidOperationException("Çıkış için bir port seçin.");
 
+                // Input port ile aynı port'u seçmeye çalışıyorsa uyar
+                var inputPortName = PortComboBox_Input.SelectedItem as string;
+                if (!string.IsNullOrEmpty(inputPortName) &&
+                    portName == inputPortName &&
+                    SerialPortManager.Instance.IsConnected)
+                {
+                    StatusIndicator_Output.Fill = new SolidColorBrush(Colors.Orange);
+                    StatusText_Output.Text = "Output port, Input port ile aynı olamaz. Farklı bir port seçin.";
+                    LogDebug($"Port çakışması: Output ve Input için aynı port seçildi: {portName}");
+                    return;
+                }
+                ;
+
                 // BaudRate ComboBox'tan güvenli değer alma
                 string baudRateStr = "115200"; // Default
                 try
@@ -268,9 +191,8 @@ namespace copilot_deneme
                 
                 var baudRate = int.Parse(baudRateStr);
 
-                // Output port için ayrı SerialPortService instance kullan
-                await _outputPortService.InitializeAsync(portName, baudRate);
-                await _outputPortService.StartReadingAsync();
+                // SerialPortManager ile output port bağla
+                await SerialPortManager.Instance.InitializeOutputAsync(portName, baudRate, _viewModel, _dispatcherQueue);
 
                 StatusIndicator_Output.Fill = new SolidColorBrush(Colors.LightGreen);
                 StatusText_Output.Text = $"HYI Output Aktif: {portName} ({baudRate})";
@@ -289,7 +211,9 @@ namespace copilot_deneme
         {
             try
             {
-                await _outputPortService.StopReadingAsync();
+                // SerialPortManager ile output port kapat
+                await SerialPortManager.Instance.DisconnectOutputAsync();
+                
                 StatusIndicator_Output.Fill = new SolidColorBrush(Colors.Red);
                 StatusText_Output.Text = "Çıkış Portu Kapalı";
                 LogDebug("Output port kapatıldı");
@@ -307,6 +231,12 @@ namespace copilot_deneme
             return SerialPortManager.Instance.SerialPortService;
         }
 
+        // Output port accessor method
+        public static SerialPortService? GetOutputSerialPortService()
+        {
+            return SerialPortManager.Instance.OutputPortService;
+        }
+
         protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
         {
             base.OnNavigatedTo(e);
@@ -314,12 +244,8 @@ namespace copilot_deneme
             // SerialPortManager'dan event'lere abone ol
             SerialPortManager.Instance.SubscribeToTelemetryData("SettingPage", OnTelemetryDataUpdated);
             
-            // Bağlantı durumunu kontrol et
-            if (SerialPortManager.Instance.IsConnected)
-            {
-                StatusIndicator_Input.Fill = new SolidColorBrush(Colors.LightGreen);
-                StatusText_Input.Text = SerialPortManager.Instance.GetConnectionInfo();
-            }
+            // Bağlantı durumlarını kontrol et ve UI'ı güncelle
+            UpdateConnectionStatus();
             
             LogDebug("SettingPage navigasyonu tamamlandı");
         }
@@ -332,6 +258,60 @@ namespace copilot_deneme
             SerialPortManager.Instance.UnsubscribeAll("SettingPage");
             
             LogDebug("SettingPage'den ayrıldı - Abonelikler iptal edildi");
+        }
+
+        private void UpdateConnectionStatus()
+        {
+            try
+            {
+                // Input port durumu
+                if (SerialPortManager.Instance.IsConnected)
+                {
+                    StatusIndicator_Input.Fill = new SolidColorBrush(Colors.LightGreen);
+                    StatusText_Input.Text = SerialPortManager.Instance.GetConnectionInfo();
+                }
+                else
+                {
+                    StatusIndicator_Input.Fill = new SolidColorBrush(Colors.Red);
+                    StatusText_Input.Text = "Giriş Portu Kapalı";
+                }
+
+                // Output port durumu
+                if (SerialPortManager.Instance.IsOutputConnected)
+                {
+                    StatusIndicator_Output.Fill = new SolidColorBrush(Colors.LightGreen);
+                    StatusText_Output.Text = $"HYI Output Aktif: {SerialPortManager.Instance.GetOutputConnectionInfo()}";
+                }
+                else
+                {
+                    StatusIndicator_Output.Fill = new SolidColorBrush(Colors.Red);
+                    StatusText_Output.Text = "Çıkış Portu Kapalı";
+                }
+
+                LogDebug($"UpdateConnectionStatus: Input={SerialPortManager.Instance.IsConnected}, Output={SerialPortManager.Instance.IsOutputConnected}");
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"UpdateConnectionStatus hatası: {ex.Message}");
+            }
+        }
+
+        private void OnTelemetryDataUpdated(SerialPortService.RocketTelemetryData rocketData)
+        {
+            // Telemetri verisi alındığında log
+            _dispatcherQueue.TryEnqueue(() =>
+            {
+                try
+                {
+                    string rocketInfo = rocketData != null ? $"Roket: {rocketData.RocketAltitude:F1}m" : "Roket: null";
+                    
+                    LogDebug($"SettingPage: TELEMETRİ GÜNCELLEME - {rocketInfo}");
+                }
+                catch (Exception ex)
+                {
+                    LogDebug($"SettingPage: Telemetri güncelleme hatası: {ex.Message}");
+                }
+            });
         }
         
         // Conditional Debug Logging - RELEASE'de hiç çalışmaz

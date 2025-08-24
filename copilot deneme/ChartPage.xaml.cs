@@ -60,7 +60,7 @@ namespace copilot_deneme
         {
             try
             {
-                _serialPortService = SerialPortManager.Instance.SerialPortService;
+                _serialPortService = SerialPortManager.Instance?.SerialPortService;
 
                 if (_serialPortService?.ViewModel != null)
                 {

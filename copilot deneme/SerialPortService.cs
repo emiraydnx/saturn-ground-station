@@ -11,227 +11,6 @@ using Microsoft.Extensions.Logging;
 
 namespace copilot_deneme
 {
-    /// <summary>
-    /// Singleton SerialPortService Manager - Tüm sayfalar arasında paylaşılan tek instance
-    /// </summary>
-    public sealed class SerialPortManager
-    {
-        private static SerialPortManager? _instance;
-        private static readonly object _lock = new object();
-        
-        private SerialPortService? _serialPortService;
-        private readonly Dictionary<string, List<Action<SerialPortService.RocketTelemetryData>>> _telemetrySubscribers = new();
-        private readonly Dictionary<string, List<Action<SerialPortService.PayloadTelemetryData>>> _payloadSubscribers = new();
-        private readonly Dictionary<string, List<Action<string>>> _dataSubscribers = new();
-        private readonly Dictionary<string, List<Action<float, float, float>>> _rotationSubscribers = new();
-        
-        private SerialPortManager() { }
-        
-        public static SerialPortManager Instance
-        {
-            get
-            {
-                if (_instance == null)
-                {
-                    lock (_lock)
-                    {
-                        _instance ??= new SerialPortManager();
-                    }
-                }
-                return _instance;
-            }
-        }
-        
-        public SerialPortService? SerialPortService => _serialPortService;
-        public bool IsConnected => _serialPortService?.IsPortOpen() == true;
-        
-        public async Task InitializeAsync(string portName, int baudRate, ChartViewModel viewModel, DispatcherQueue dispatcher)
-        {
-            try
-            {
-                if (_serialPortService != null)
-                {
-                    await _serialPortService.DisposeAsync();
-                }
-                
-                _serialPortService = new SerialPortService();
-                _serialPortService.ViewModel = viewModel;
-                _serialPortService.Dispatcher = dispatcher;
-                
-                // Internal event handler'ları bağla
-                _serialPortService.OnTelemetryDataUpdated += OnInternalTelemetryDataUpdated;
-                _serialPortService.OnPayloadDataUpdated += OnInternalPayloadDataUpdated;
-                _serialPortService.OnDataReceived += OnInternalDataReceived;
-                _serialPortService.OnRotationDataReceived += OnInternalRotationDataReceived;
-                
-                await _serialPortService.InitializeAsync(portName, baudRate);
-                await _serialPortService.StartReadingAsync();
-                
-                LogDebug($"SerialPortManager: Port bağlandı {portName} @ {baudRate}");
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"SerialPortManager başlatma hatası: {ex.Message}");
-                throw;
-            }
-        }
-        
-        public async Task DisconnectAsync()
-        {
-            try
-            {
-                if (_serialPortService != null)
-                {
-                    await _serialPortService.StopReadingAsync();
-                    LogDebug("SerialPortManager: Bağlantı kesildi");
-                }
-            }
-            catch (Exception ex)
-            {
-                LogDebug($"SerialPortManager kapatma hatası: {ex.Message}");
-            }
-        }
-        
-        // Subscriber management
-        public void SubscribeToTelemetryData(string pageId, Action<SerialPortService.RocketTelemetryData> callback)
-        {
-            if (!_telemetrySubscribers.ContainsKey(pageId))
-                _telemetrySubscribers[pageId] = new List<Action<SerialPortService.RocketTelemetryData>>();
-            
-            _telemetrySubscribers[pageId].Add(callback);
-            LogDebug($"SerialPortManager: {pageId} telemetri verilerine abone oldu");
-        }
-
-        public void SubscribeToPayloadData(string pageId, Action<SerialPortService.PayloadTelemetryData> callback)
-        {
-            if (!_payloadSubscribers.ContainsKey(pageId))
-                _payloadSubscribers[pageId] = new List<Action<SerialPortService.PayloadTelemetryData>>();
-
-            _payloadSubscribers[pageId].Add(callback);
-            LogDebug($"SerialPortManager: {pageId} payload verilerine abone oldu");
-        }
-        
-        public void SubscribeToDataReceived(string pageId, Action<string> callback)
-        {
-            if (!_dataSubscribers.ContainsKey(pageId))
-                _dataSubscribers[pageId] = new List<Action<string>>();
-            
-            _dataSubscribers[pageId].Add(callback);
-            LogDebug($"SerialPortManager: {pageId} ham veriye abone oldu");
-        }
-        
-        public void SubscribeToRotationData(string pageId, Action<float, float, float> callback)
-        {
-            if (!_rotationSubscribers.ContainsKey(pageId))
-                _rotationSubscribers[pageId] = new List<Action<float, float, float>>();
-            
-            _rotationSubscribers[pageId].Add(callback);
-            LogDebug($"SerialPortManager: {pageId} rotation verilerine abone oldu");
-        }
-        
-        public void UnsubscribeAll(string pageId)
-        {
-            _telemetrySubscribers.Remove(pageId);
-            _payloadSubscribers.Remove(pageId);
-            _dataSubscribers.Remove(pageId);
-            _rotationSubscribers.Remove(pageId);
-            LogDebug($"SerialPortManager: {pageId} tüm aboneliklerden çıkarıldı");
-        }
-        
-        // Internal event handlers - optimize edildi
-        private void OnInternalTelemetryDataUpdated(SerialPortService.RocketTelemetryData data)
-        {
-            // Event dağıtımı optimize edildi - LINQ yerine foreach
-            foreach (var subscriberList in _telemetrySubscribers.Values)
-            {
-                foreach (var callback in subscriberList)
-                {
-                    try
-                    {
-                        callback(data);
-                    }
-                    catch (Exception ex)
-                    {
-                        LogDebug($"SerialPortManager telemetri callback hatası: {ex.Message}");
-                    }
-                }
-            }
-        }
-
-        private void OnInternalPayloadDataUpdated(SerialPortService.PayloadTelemetryData data)
-        {
-            foreach (var subscriberList in _payloadSubscribers.Values)
-            {
-                foreach (var callback in subscriberList)
-                {
-                    try
-                    {
-                        callback(data);
-                    }
-                    catch (Exception ex)
-                    {
-                        LogDebug($"SerialPortManager payload callback hatası: {ex.Message}");
-                    }
-                }
-            }
-        }
-        
-        private void OnInternalDataReceived(string data)
-        {
-            // Sadece gerekirse ham veri event'ini tetikle
-            if (_dataSubscribers.Count > 0)
-            {
-                foreach (var subscriberList in _dataSubscribers.Values)
-                {
-                    foreach (var callback in subscriberList)
-                    {
-                        try
-                        {
-                            callback(data);
-                        }
-                        catch (Exception ex)
-                        {
-                            LogDebug($"SerialPortManager data callback hatası: {ex.Message}");
-                        }
-                    }
-                }
-            }
-        }
-        
-        private void OnInternalRotationDataReceived(float x, float y, float z)
-        {
-            // Sadece rotation subscriber'ları varsa çalıştır
-            if (_rotationSubscribers.Count > 0)
-            {
-                foreach (var subscriberList in _rotationSubscribers.Values)
-                {
-                    foreach (var callback in subscriberList)
-                    {
-                        try
-                        {
-                            callback(x, y, z);
-                        }
-                        catch (Exception ex)
-                        {
-                            LogDebug($"SerialPortManager rotation callback hatası: {ex.Message}");
-                        }
-                    }
-                }
-            }
-        }
-        
-        public string GetConnectionInfo()
-        {
-            return _serialPortService?.GetPortInfo() ?? "Bağlantı yok";
-        }
-        
-        // Conditional Debug Logging - RELEASE'de hiç çalışmaz
-        [Conditional("DEBUG")]
-        private static void LogDebug(string message)
-        {
-            System.Diagnostics.Debug.WriteLine(message);
-        }
-    }
     
     public class SerialPortService : ISerialPortService
     {
@@ -250,14 +29,37 @@ namespace copilot_deneme
         private static readonly byte[] PAYLOAD_HEADER = { 0xCD, 0xDE, 0x14, 0x15 };
         private static readonly byte[] PAYLOAD_FOOTER = { 0xDD, 0xCC };
 
+        // HYI Paketi için sabitler (78 byte)
+        private const int HYI_PACKET_SIZE = 78;
+        private static readonly byte[] HYI_HEADER = { 0xFF, 0xFF, 0x54, 0x52 };
+        private static readonly byte[] HYI_FOOTER = { 0x0D, 0x0A };
+
+        // HYI veri tutma ve birleştirme
+        private HYITelemetryData _currentHyiData;
+        private RocketTelemetryData? _lastRocketData;
+        private PayloadTelemetryData? _lastPayloadData;
+        private byte _hyiPacketCounter = 0;
+
+        // Output Port Service referansı
+        private SerialPortService? _outputPortService;
+
         public SerialPortService(ILogger<SerialPortService>? logger = null)
         {
             _logger = logger;
+            // HYI data'yı başlat
+            _currentHyiData = new HYITelemetryData();
         }
 
         #region Properties
         public ChartViewModel? ViewModel { get; set; }
         public DispatcherQueue? Dispatcher { get; set; }
+
+        // Output Port Service property'si - SettingPage'den set edilecek
+        public SerialPortService? OutputPortService 
+        { 
+            get => _outputPortService; 
+            set => _outputPortService = value; 
+        }
         #endregion
 
         #region Events
@@ -322,6 +124,10 @@ namespace copilot_deneme
             public float PayloadGpsAltitude { get; set; }
             public float PayloadLatitude { get; set; }
             public float PayloadLongitude { get; set; }
+            // Kademe GPS verileri - her zaman 0.0f döndürür
+            public float KademeGPSİrtifa { get; set; } = 0.0f;
+            public float KademeEnlem { get; set; } = 0.0f;
+            public float KademeBoylam { get; set; } = 0.0f;
             public float GyroscopeX { get; set; }
             public float GyroscopeY { get; set; }
             public float GyroscopeZ { get; set; }
@@ -380,12 +186,19 @@ namespace copilot_deneme
                 throw new InvalidOperationException(error);
             }
 
+            // Port zaten açıksa, kullanıcıyı bilgilendir ve işlemi sonlandır.
+            if (_inputPort.IsOpen)
+            {
+                var message = $"Port zaten açık: {_inputPort.PortName}";
+                _logger?.LogInformation(message);
+                OnError?.Invoke(message); // UI'da göstermek için event'i tetikle
+                return; // Metoddan çık
+            }
+
             try
             {
-                if (!_inputPort.IsOpen)
-                {
-                    await Task.Run(() => _inputPort.Open());
-                }
+                // Portu aç
+                await Task.Run(() => _inputPort.Open());
 
                 _cancellationTokenSource = new CancellationTokenSource();
                 _processingTask = Task.Run(() => ProcessBufferLoop(_cancellationTokenSource.Token), _cancellationTokenSource.Token);
@@ -398,7 +211,7 @@ namespace copilot_deneme
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "SerialPort okuma başlatma hatası");
-                OnError?.Invoke($"Port okuma hatası: {ex.Message}");
+                OnError?.Invoke($"{ex.Message}");
                 throw;
             }
         }
@@ -512,12 +325,17 @@ namespace copilot_deneme
 
                         if (telemetryData != null)
                         {
+                            _lastRocketData = telemetryData;
+                            
+                            // HYI verilerini Roket verisinden güncelle
+                            UpdateHYIDataFromRocket(telemetryData);
+
                             Dispatcher?.TryEnqueue(() =>
                             {
                                 OnRocketDataUpdated?.Invoke(telemetryData);
                                 OnTelemetryDataUpdated?.Invoke(telemetryData);
                                 OnRotationDataReceived?.Invoke(telemetryData.GyroX, telemetryData.GyroY, telemetryData.GyroZ);
-                                UpdateCharts(telemetryData);
+                              
                             });
                         }
                         // İşlenen paketi buffer'dan sil
@@ -542,11 +360,19 @@ namespace copilot_deneme
 
                         if (payloadData != null)
                         {
+                            _lastPayloadData = payloadData;
+                            
+                            // HYI verilerini Payload verisinden güncelle
+                            UpdateHYIDataFromPayload(payloadData);
+
                             Dispatcher?.TryEnqueue(() =>
                             {
                                 OnPayloadDataUpdated?.Invoke(payloadData);
                                 UpdateCharts(payloadData);
                             });
+
+                            // HYI paketini output port'a gönder (sadece payload geldiğinde)
+                            Task.Run(async () => await SendHYIPacketAsync());
                         }
                         // İşlenen paketi buffer'dan sil
                         _buffer.RemoveRange(0, PAYLOAD_PACKET_SIZE);
@@ -558,6 +384,149 @@ namespace copilot_deneme
                     }
                 }
             }
+        }
+
+        // HYI verilerini Roket telemetrisinden güncelle
+        private void UpdateHYIDataFromRocket(RocketTelemetryData rocketData)
+        {
+            if (_currentHyiData == null) return;
+
+            _currentHyiData.TeamId = rocketData.TeamID;
+            _currentHyiData.Altitude = rocketData.RocketAltitude;
+            _currentHyiData.RocketGpsAltitude = rocketData.RocketGpsAltitude;
+            _currentHyiData.RocketLatitude = rocketData.RocketLatitude;
+            _currentHyiData.RocketLongitude = rocketData.RocketLongitude;
+            _currentHyiData.GyroscopeX = rocketData.GyroX;
+            _currentHyiData.GyroscopeY = rocketData.GyroY;
+            _currentHyiData.GyroscopeZ = rocketData.GyroZ;
+            _currentHyiData.AccelerationX = rocketData.AccelX;
+            _currentHyiData.AccelerationY = rocketData.AccelY;
+            _currentHyiData.AccelerationZ = rocketData.AccelZ;
+            _currentHyiData.Angle = rocketData.Angle;
+            _currentHyiData.Status = rocketData.Status;
+
+            LogDebug($"HYI Data Roket güncellemesi: İrtifa={rocketData.RocketAltitude:F2}m");
+        }
+
+        // HYI verilerini Payload telemetrisinden güncelle
+        private void UpdateHYIDataFromPayload(PayloadTelemetryData payloadData)
+        {
+            if (_currentHyiData == null) return;
+
+            _currentHyiData.PayloadGpsAltitude = payloadData.GpsAltitude;
+            _currentHyiData.PayloadLatitude = payloadData.Latitude;
+            _currentHyiData.PayloadLongitude = payloadData.Longitude;
+            
+            // Kademe GPS verileri her zaman 0 kalır - değiştirilmez
+
+            LogDebug($"HYI Data Payload güncellemesi: Payload İrtifa={payloadData.Altitude:F2}m");
+        }
+
+        // HYI paketini 78 byte olarak oluştur ve output port'a gönder
+        private async Task SendHYIPacketAsync()
+        {
+            try
+            {
+                if (_currentHyiData == null || _outputPortService?.IsPortOpen() != true)
+                {
+                    LogDebug("HYI paketi gönderilemedi: OutputPort kapalı veya HYI data null");
+                    return;
+                }
+
+                // Paket counter'ı artır
+                _currentHyiData.PacketCounter = _hyiPacketCounter++;
+
+                // 78 byte'lık HYI paketini oluştur
+                byte[] hyiPacket = CreateHYIPacket(_currentHyiData);
+
+                // Output port'a gönder
+                await _outputPortService.WriteAsync(hyiPacket);
+
+                // HYI Event tetikle
+                Dispatcher?.TryEnqueue(() =>
+                {
+                    OnHYIPacketReceived?.Invoke(_currentHyiData);
+                });
+
+                LogDebug($"HYI Paketi gönderildi - 78 byte, Paket #{_currentHyiData.PacketCounter}, TeamID: {_currentHyiData.TeamId}");
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"HYI paketi gönderme hatası: {ex.Message}");
+            }
+        }
+
+        // 78 byte HYI paketi oluştur
+        private byte[] CreateHYIPacket(HYITelemetryData hyiData)
+        {
+            byte[] packet = new byte[HYI_PACKET_SIZE];
+            int offset = 0;
+
+            // Header (4 byte)
+            Array.Copy(HYI_HEADER, 0, packet, offset, HYI_HEADER.Length);
+            offset += HYI_HEADER.Length;
+
+            // Team ID (1 byte)
+            packet[offset++] = hyiData.TeamId;
+
+            // Packet Counter (1 byte)
+            packet[offset++] = hyiData.PacketCounter;
+
+            // Float veriler (18 * 4 = 72 byte) - Kademe GPS dahil
+            BitConverter.GetBytes(hyiData.Altitude).CopyTo(packet, offset);
+            offset += 4;
+            BitConverter.GetBytes(hyiData.RocketGpsAltitude).CopyTo(packet, offset);
+            offset += 4;
+            BitConverter.GetBytes(hyiData.RocketLatitude).CopyTo(packet, offset);
+            offset += 4;
+            BitConverter.GetBytes(hyiData.RocketLongitude).CopyTo(packet, offset);
+            offset += 4;
+            BitConverter.GetBytes(hyiData.PayloadGpsAltitude).CopyTo(packet, offset);
+            offset += 4;
+            BitConverter.GetBytes(hyiData.PayloadLatitude).CopyTo(packet, offset);
+            offset += 4;
+            BitConverter.GetBytes(hyiData.PayloadLongitude).CopyTo(packet, offset);
+            offset += 4;
+            // Kademe GPS verileri (her zaman 0.0f)
+            BitConverter.GetBytes(hyiData.KademeGPSİrtifa).CopyTo(packet, offset);
+            offset += 4;
+            BitConverter.GetBytes(hyiData.KademeEnlem).CopyTo(packet, offset);
+            offset += 4;
+            BitConverter.GetBytes(hyiData.KademeBoylam).CopyTo(packet, offset);
+            offset += 4;
+            BitConverter.GetBytes(hyiData.GyroscopeX).CopyTo(packet, offset);
+            offset += 4;
+            BitConverter.GetBytes(hyiData.GyroscopeY).CopyTo(packet, offset);
+            offset += 4;
+            BitConverter.GetBytes(hyiData.GyroscopeZ).CopyTo(packet, offset);
+            offset += 4;
+            BitConverter.GetBytes(hyiData.AccelerationX).CopyTo(packet, offset);
+            offset += 4;
+            BitConverter.GetBytes(hyiData.AccelerationY).CopyTo(packet, offset);
+            offset += 4;
+            BitConverter.GetBytes(hyiData.AccelerationZ).CopyTo(packet, offset);
+            offset += 4;
+            BitConverter.GetBytes(hyiData.Angle).CopyTo(packet, offset);
+            offset += 4;
+
+            // Status (1 byte)
+            packet[offset++] = hyiData.Status;
+
+            // CRC hesapla (1 byte) - Header hariç, footer hariç tüm veriler üzerinden
+            byte crc = 0;
+            for (int i = HYI_HEADER.Length; i < offset; i++)
+            {
+                crc ^= packet[i];
+            }
+            packet[offset++] = crc;
+            hyiData.CRC = crc;
+
+            // Footer (2 byte)
+            Array.Copy(HYI_FOOTER, 0, packet, offset, HYI_FOOTER.Length);
+
+            LogDebug($"HYI Paketi oluşturuldu: {packet.Length} byte, CRC: 0x{crc:X2}");
+
+            return packet;
         }
 
         private int FindHeader(List<byte> buffer, byte[] headerToFind)
@@ -879,7 +848,5 @@ namespace copilot_deneme
             var hexString = BitConverter.ToString(tempBuffer, 0, bytesRead).Replace("-", " ");
             OnDataReceived?.Invoke($"[{bytesRead} byte] {hexString}");
         }
-        
-       
     }
 }
